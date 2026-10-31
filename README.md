@@ -6,6 +6,7 @@ Proti stereotypu: každá bitva má vlastní prostředí (ulice, pláž, déšť
 
 - Hra je jeden soubor `index.html` bez buildu. Hostuje se na GitHub Pages.
 - Sync: `https://mantledb.sh/v2/polstarovka-<id>/hra`, odkaz `#r.<id>`. Ukládají se jen vstupy hodů `[předmět, trik, vx, vy, razítko, vzkaz, minuta, obrana]`, seed, `m` (prostředí) a `p` (předchozí prostředí). Dokumenty bez `m`, `p` a osmého prvku se přehrají beze změny.
+- Sólo (trénink s botem): tlačítko „Zkusit sám“ na úvodu, nebo adresa `#solo`. Jen lokálně: žádná místnost, odkaz ani sync, nic do série, titulů a čepic. Prostředí, vítr a události se losují jako v ostré hře; na konci „Znovu“ a „Vyzvat soupeře“ (normální výzva).
 - Fyzika (`<script id="engine">`) počítá jen s celými čísly a s pevným krokem, takže oba prohlížeče spočítají stejný výsledek.
 
 Testy (server: `python -m http.server 8797` ve složce hry, Playwright z `%APPDATA%/npm/node_modules`):
@@ -13,6 +14,7 @@ Testy (server: `python -m http.server 8797` ve složce hry, Playwright z `%APPDA
     node tests/uhni.cjs                      # engine Uhni!, bez prohlížeče
     node tests/mods.cjs                      # prostředí, Vztek, zpětná kompatibilita, bez prohlížeče
     node tests/duel.cjs <URL> A|B|C          # celý zápas ve dvou prohlížečích přes živý sync + odveta
+    node tests/solo.cjs <URL>                # sólo: partie s botem v Chromiu desktop a WebKit iPhone 13, bez požadavku na sync
     node tests/ui.cjs <URL>                  # rozhraní, ovládání, rozložení
     node tests/shots.cjs <URL>               # snímky celého průběhu (tests/shots/flow)
     node tests/themes.cjs <URL>              # snímky všech prostředí a čelenek (tests/shots/themes)

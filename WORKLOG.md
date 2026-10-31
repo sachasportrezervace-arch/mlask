@@ -4,6 +4,11 @@ PŘEVZATO 31. 10. 19:35 – redesign postav a efektů z Markova zadání, sessio
 
 PŘEVZATO 31. 10. – dodělává session na účtu P, jiná session sem nepíše.
 
+## 2026-10-31 – sólo režim „Zkusit sám“ / #solo (session na účtu P)
+- **Hotovo:** tlačítko „Zkusit sám“ vedle „Založit výzvu“ a adresa `#solo`: partie proti botovi (36 náhodných hodů, vybere nejlepší a přidá šum ±7 %, trefí asi 35 %, hází s pauzou ~1,2 s), bez sync, místnosti a odkazu, mimo sérii a kosmetiku (`startSolo`, `botMaybe`, `botThrow`). V HUD je „Bot(ka) · trénink“, na konci „Znovu“ a „Vyzvat soupeře“. Prostředí se losuje přes `Pol.pickMod`.
+- **Ověřeno lokálně:** `tests/solo.cjs` 42/42 (Chromium desktop + WebKit iPhone 13, 0 požadavků na mantledb, beze změny localStorage), uhni 4/4, mods 12/12, duel A 25/25, ui 137/137, vše exit 0.
+- **Otevřené:** když začíná bot, první obrana hráče je náhodná; test hraje dokonalým řešičem, takže partie jsou krátké.
+
 ## PŘEDÁVKA 2026-10-31 19:45 – redesign postav a efektů (session mlask-vizual, kontext plný)
 - **Zadání (Mark přes session herny):** postavy, animace a efekty jsou „slop“ – přepracovat od základu na úroveň profi indie hry (reference nArtBox Boy vs Girl, plochý vektor, humor ve výrazech). Logiku, sync, mody a testy neměnit, jen kvůli vykreslení.
 - **Hotovo (návrh, ne v `index.html`):** `design/rig-navrh/`

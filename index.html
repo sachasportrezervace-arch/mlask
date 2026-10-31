@@ -59,6 +59,10 @@ button{cursor:pointer}
 .nm{position:absolute;top:38px;font-size:13px;font-weight:600;line-height:1.2;max-width:34%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nm0{left:62px}
 .nm1{right:62px;text-align:right}
+.btnrow{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:10px}
+.btnrow .btn{padding:0 10px;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stag{font-weight:500;opacity:.7}
+.stag::before{content:" · "}
 .hud.dark .nm{color:#fff}
 .hrow{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px}
 .tricks{display:flex;gap:6px;align-items:center;min-width:0}
@@ -394,7 +398,10 @@ textarea.bubble{min-height:120px;resize:vertical;font-size:15px;line-height:1.4;
           </label>
         </div>
       </details>
-      <button class="btn primary" type="submit" id="setupSubmit">Založit výzvu</button>
+      <div class="btnrow">
+        <button class="btn primary" type="submit" id="setupSubmit">Založit výzvu</button>
+        <button class="btn" type="button" id="soloBtn">Zkusit sám</button>
+      </div>
     </form>
     <div class="recent" id="recent" hidden>
       <p class="label">Rozehrané bitvy na tomhle zařízení</p>
@@ -1316,6 +1323,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   let me = null;       // 0 = levý (zakladatel), 1 = pravý, null = přihlíží
   let view = "setup";
   let busy = false, net = "", bootSeq = 0;
+  let solo = false, botTimer = null, soloN = 0; // sólo = trénink s botem, jen lokálně (viz startSolo)
   let shownK = 0;      // kolik hodů už je na obrazovce dohraných
   let play = null;     // právě přehrávaný hod
   let selItem = 0, selPower = 0, draftStamp = 0, selDef = 1;
@@ -1329,7 +1337,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   // postup v sérii: výhry v sérii dají titul a kosmetiku (1 čelenka, 2 párty čepice, 3 koruna)
   const TITLES = ["Nováček", "Házeč", "Mlaskač", "Král polštářů"], HATS = ["", "čelenku", "párty čepici", "korunu"];
   const winsOf = j => !g ? 0 : (() => { const s = lastState(); return g.w[j] + (s && s.over && s.over.win === j ? 1 : 0); })();
-  const hatOf = j => Math.min(3, winsOf(j));
+  const hatOf = j => solo ? 0 : Math.min(3, winsOf(j));
   const overOf = () => { const s = lastState(); return s ? s.over : null; };
   const turnK = () => g ? g.T.length : 0;
   const thrower = () => g ? Pol.throwerOf(g, turnK()) : 0;
@@ -1435,7 +1443,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     endTimer = setTimeout(() => { if (overOf() && caughtUp() && (view === "play")) show("end"); }, 800);
   }
   const seenKey = () => "pol-seen-" + room.id;
-  function saveSeen() { if (room && g) store.set(seenKey(), JSON.stringify({ gn: g.gn, k: shownK })); }
+  function saveSeen() { if (room && g && !solo) store.set(seenKey(), JSON.stringify({ gn: g.gn, k: shownK })); }
   function readSeen() { return attempt(() => JSON.parse(store.get(seenKey()) || "null"), null); }
 
   // ---------- efekty ----------
@@ -2202,6 +2210,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
       c.classList.toggle("on", turnOwner === j && on);
       c.style.setProperty("--tint", sexOf(j) === "h" ? "#FFD9E6" : "#DCE3FF");
       const nm = $("nm" + j); nm.textContent = nameOf(j) + (j === me ? " (ty)" : "");
+      if (solo && j !== me) { const tg = document.createElement("span"); tg.className = "stag"; tg.textContent = "trénink"; nm.append(tg); }
       $("hpn" + j).textContent = hp[j];
       const f = $("fill" + j);
       f.style.setProperty("--p", String(Math.max(0, hp[j]) / 100));
@@ -2314,13 +2323,13 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     else {
       text = `Na tahu je ${nameOf(opp)}…`;
       const d = shownState().def[me];
-      meta = (sexOf(opp) === "h" ? "Její" : "Jeho") + " hod se tu přehraje sám." + (d ? ` Máš tajně připravené: ${DEFS[d].name}.` : "");
+      meta = solo ? (d ? `Máš tajně připravené: ${DEFS[d].name}.` : "") : (sexOf(opp) === "h" ? "Její" : "Jeho") + " hod se tu přehraje sám." + (d ? ` Máš tajně připravené: ${DEFS[d].name}.` : "");
     }
     $("waitText").textContent = text;
     $("waitMeta").textContent = meta; $("waitMeta").hidden = !meta;
   }
   // nabídka menu (odkaz, pravidla, nová hra)
-  $("menuBtn").addEventListener("click", () => { $("menu").hidden = false; $("menuClose").focus(); });
+  $("menuBtn").addEventListener("click", () => { $("copyTopBtn").hidden = solo; $("menu").hidden = false; $("menuClose").focus(); });
   $("menuClose").addEventListener("click", () => { $("menu").hidden = true; });
   $("menu").addEventListener("click", ev => { if (ev.target === $("menu") || ev.target.closest("button")) $("menu").hidden = true; });
 
@@ -2348,6 +2357,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     if (view === "intro") renderIntro();
     if (view === "share") renderShare();
     if (view === "end") renderEnd();
+    botMaybe();
   }
 
   // výběr 3 triků a první obrany
@@ -2374,7 +2384,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     [...$("picks" + n).children].forEach(b => b.setAttribute("aria-pressed", String(picksSel[n].includes(+b.dataset.p))));
     $("pickCount" + n).textContent = `${picksSel[n].length} / 3`;
     if (n === 1) $("acceptBtn").disabled = busy || picksSel[1].length !== 3;
-    if (n === 0) $("setupSubmit").disabled = busy || picksSel[0].length !== 3;
+    if (n === 0) { $("setupSubmit").disabled = busy || picksSel[0].length !== 3; $("soloBtn").disabled = busy || picksSel[0].length !== 3; }
   }
   buildPicks(0); buildPicks(1);
   const rxPickers = [buildDefs($("rxSetup"), d => { rxSel = d; rxPickers.forEach(p => p.sync()); }, () => rxSel), buildDefs($("rxIntro"), d => { rxSel = d; rxPickers.forEach(p => p.sync()); }, () => rxSel)];
@@ -2445,13 +2455,14 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     if (o.draw) $("endTitle").textContent = "Remíza. Oba v peří.";
     else if (youWon) $("endTitle").innerHTML = "Výhra je <span class=\"hl\">tvoje!</span>";
     else $("endTitle").textContent = me === null ? `${nameOf(o.win)} ${past(o.win, "vyhrál")}.` : `${nameOf(o.win)} ${past(o.win, "vyhrál")}. Tentokrát.`;
-    const md = Pol.MODS[g.m | 0], tier = j => Math.min(3, j), up = o.win != null && tier(w[o.win]) > tier(g.w[o.win]);
-    $("endMeta").textContent = `Bitva ${g.gn + 1}${md.name && md.id !== "classic" ? " (" + md.name.toLowerCase() + ")" : ""}, ${g.T.length} hodů. Zbylo: ${nameOf(0)} ${st.hp[0]}, ${nameOf(1)} ${st.hp[1]}.` + (up ? ` ${nameOf(o.win)} je teď ${TITLES[tier(w[o.win])]} a dostává ${HATS[tier(w[o.win])]}.` : "");
+    const md = Pol.MODS[g.m | 0], tier = j => Math.min(3, j), up = !solo && o.win != null && tier(w[o.win]) > tier(g.w[o.win]);
+    $("endMeta").textContent = solo ? `Trénink${md.name && md.id !== "classic" ? " (" + md.name.toLowerCase() + ")" : ""}, ${g.T.length} hodů. Zbylo: ${nameOf(0)} ${st.hp[0]}, ${nameOf(1)} ${st.hp[1]}.` : `Bitva ${g.gn + 1}${md.name && md.id !== "classic" ? " (" + md.name.toLowerCase() + ")" : ""}, ${g.T.length} hodů. Zbylo: ${nameOf(0)} ${st.hp[0]}, ${nameOf(1)} ${st.hp[1]}.` + (up ? ` ${nameOf(o.win)} je teď ${TITLES[tier(w[o.win])]} a dostává ${HATS[tier(w[o.win])]}.` : "");
     const W2 = o.win != null ? nameOf(o.win) : "", L2 = o.win != null ? nameOf(1 - o.win) : "";
     $("tLabel").textContent = s ? "Sázka" : "Výsledek";
     $("tRes").textContent = o.draw ? (s ? "Sázka se přesouvá do odvety." : "Nikdo nevyhrál.")
       : me === null ? (s ? s.third(W2, L2) : `Vyhrává ${W2}.`)
-      : s ? (youWon ? s.win(W2, L2) : s.lose(W2, L2)) : (youWon ? "Bez sázky, jen pro radost." : `Vyhrává ${W2}.`);
+      : s ? (youWon ? s.win(W2, L2) : s.lose(W2, L2)) : (youWon ? "Bez sázky, jen pro radost." : solo ? "Zkus to znovu." : `Vyhrává ${W2}.`);
+    $("tSer").hidden = solo;
     $("tSer").textContent = `série: ${nameOf(0)} ${w[0]} : ${w[1]} ${nameOf(1)}`;
     const stampOn = !!(youWon && s);
     $("tStampBox").hidden = !stampOn;
@@ -2460,13 +2471,15 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     $("endPrimary").hidden = me === null;
     $("endPrimary").disabled = busy;
     $("endCaption").textContent = "";
-    if (me === null) $("endSecondary").textContent = "Zkopírovat odkaz na hru";
+    if (solo) { $("endPrimary").textContent = "Znovu"; $("endSecondary").textContent = "Vyzvat soupeře"; }
+    else if (me === null) $("endSecondary").textContent = "Zkopírovat odkaz na hru";
     else if (o.draw || youWon) { $("endPrimary").textContent = `Odveta (začíná ${loser})`; $("endSecondary").textContent = "Zkopírovat odkaz na hru"; }
     else { $("endPrimary").textContent = "Chci odvetu"; $("endSecondary").textContent = "Uznat porážku"; $("endCaption").textContent = `zkopíruje zprávu: „${concedeText()}“`; }
   }
 
   // ---------- zápis do místnosti ----------
   async function commit(next, ok, conflictText) {
+    if (solo) { confirmedG = next; return true; } // sólo: nic se neposílá
     if (!room) return false;
     const stale = opStale();
     busy = true; pollSeq++; render();
@@ -2529,7 +2542,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   function schedule(ms) { clearTimeout(pollT); pollT = setTimeout(poll, ms); }
   async function poll() {
     clearTimeout(pollT);
-    if (!room || room.v < 0 || document.hidden) return;
+    if (!room || solo || room.v < 0 || document.hidden) return;
     if (busy) { schedule(1500); return; }
     const id = room.id, gen = bootSeq, seq = ++pollSeq;
     const fresh = () => !!room && room.id === id && bootSeq === gen && seq === pollSeq && !busy;
@@ -2562,8 +2575,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     if (!await commit(next, cur => cur.gn === gn && Pol.replay(cur).states.slice(-1)[0].over, "Odvetu už mezitím založil soupeř.") || stale()) return;
     confirmedG = next; setG(next); endHidden = false; show("play");
   }
-  $("endPrimary").addEventListener("click", rematch);
+  $("endPrimary").addEventListener("click", () => solo ? startSolo(true) : rematch());
   $("endSecondary").addEventListener("click", () => {
+    if (solo) { $("newGameBtn").click(); return; } // Vyzvat soupeře = normální založení výzvy
     const o = overOf();
     if (me !== null && o && o.win != null && o.win !== me) copy(concedeText(), "Zkopírováno, vlož to do chatu");
     else copyLink();
@@ -2628,7 +2642,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
 
   function recentRooms() { return attempt(() => JSON.parse(store.get("pol-rooms") || "[]"), []).filter(r => r && /^[0-9a-z]{6,24}$/.test(r.id)); }
   function remember() {
-    if (!room || !g) return;
+    if (!room || !g || solo) return;
     const list = recentRooms().filter(r => r.id !== room.id);
     list.unshift({ id: room.id, x: g.x, o: g.o, me });
     store.set("pol-rooms", JSON.stringify(list.slice(0, 5)));
@@ -2673,7 +2687,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     syncCustom(); setView("setup");
   }
   $("newGameBtn").addEventListener("click", () => {
-    clearTimeout(pollT); bootSeq++;
+    clearTimeout(pollT); leaveSolo(); bootSeq++;
     room = null; me = null; g = null; rep = null; busy = false; net = ""; play = null;
     history.pushState(null, "", location.pathname + location.search);
     showSetup();
@@ -2689,6 +2703,61 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     if (k === "c") { kc = $("stakeCustom").value.trim().slice(0, 32); if (!kc) k = ""; }
     const sd0 = newSeed();
     createRoom({ x, o, xs: demoSex, s: $("starter").value === "0" ? 0 : 1, seed: sd0, m: Pol.pickMod(sd0, 0, 0), p: 0, gn: 0, rx: $("starter").value === "0" ? 0 : rxSel, k, kc, w: [0, 0], px: picksSel[0].slice(), po: null, T: [], n: $("setupNote").value.trim().slice(0, 40) });
+  });
+
+  // ---------- sólo: trénink s botem (jen lokálně) ----------
+  // Žádná místnost, odkaz ani zápis do mantledb (commit i poll se přeskočí), nic do série, titulů, čepic ani nedávných her.
+  // Engine, prostředí (pickMod), vítr a události jsou stejné jako v ostré hře; bot jen přidává tahy do g.T na tomhle zařízení.
+  function leaveSolo() { solo = false; clearTimeout(botTimer); botTimer = null; }
+  function startSolo(again) {
+    clearTimeout(pollT); clearTimeout(botTimer); botTimer = null; bootSeq++;
+    const prev = again && solo && g ? g : null, o = prev && overOf();
+    const rnd = n => Math.floor(Math.random() * n);
+    solo = true; room = { id: "solo", v: 0, s0: device, s1: "bot" }; me = 0; busy = false; net = ""; fails = 0; play = null;
+    const xs = prev ? prev.xs : demoSex, botSex = xs === "k" ? "h" : "k";
+    const s = !prev || !o ? 0 : o.draw ? 1 - prev.s : 1 - o.win; // první hru začíná hráč, pak poražený
+    const po = []; while (po.length < 3) { const p = 1 + rnd(6); if (!po.includes(p)) po.push(p); }
+    const sd = newSeed();
+    const ng = { x: prev ? prev.x : ($("name0").value.trim() || store.get("pol-name") || "Hráč").slice(0, 20), o: botSex === "h" ? "Botka" : "Bot", xs, s, seed: sd,
+      m: Pol.pickMod(sd, prev ? prev.m | 0 : 0, prev ? prev.p | 0 : 0), p: prev ? prev.m | 0 : 0, gn: ++soloN, rx: s === 0 ? 1 + rnd(3) : rxSel, k: "", kc: "", w: [0, 0],
+      px: prev ? prev.px.slice() : picksSel[0].slice(), po, T: [], n: "" };
+    confirmedG = ng; g = null; selItem = 0; selPower = 0; draftStamp = 0; endHidden = false;
+    setG(ng);
+    setView("play");
+  }
+  // bot: ze 36 náhodných hodů (do soupeřovy tajné obrany nekouká) vezme nejlepší a přidá šum ±7 %, takže se netrefuje pořád
+  function botMaybe() {
+    if (!solo || botTimer || !g || view !== "play" || overOf() || !caughtUp() || thrower() !== 1) return;
+    const gn = g.gn, len = g.T.length;
+    botTimer = setTimeout(() => {
+      botTimer = null;
+      if (solo && g && g.gn === gn && g.T.length === len && view === "play" && !overOf() && caughtUp() && thrower() === 1) botThrow(); else botMaybe();
+    }, 1200);
+  }
+  function botThrow() {
+    const rnd = n => Math.floor(Math.random() * n);
+    const st = shownState(), d = layoutNow().players[1].dir;
+    const owned = [1, 2, 3, 4].filter(i => st.ammo[1][i] > 0);
+    const item = owned.length && Math.random() < 0.4 ? owned[rnd(owned.length)] : 0;
+    const free = (g.po || []).filter(p => !(st.used[1] & (1 << p)) && (p !== 2 || st.hp[1] <= 70));
+    const power = free.length && Math.random() < 0.3 ? free[rnd(free.length)] : 0;
+    let best = null;
+    for (let n = 0; n < 36; n++) {
+      const a = (12 + Math.random() * 68) * Math.PI / 180, pw = 0.35 + Math.random() * 0.65;
+      const vx = quant(Math.cos(a) * pw * VMAX * d), vy = quant(-Math.sin(a) * pw * VMAX);
+      const r = Pol.simulate(g, { ...st, def: [0, 0] }, [item, power, vx, vy]);
+      const sc = (st.hp[0] - r.st.hp[0]) - 2 * (st.hp[1] - r.st.hp[1]) + Math.random();
+      if (!best || sc > best.sc) best = { sc, vx, vy };
+    }
+    const nz = () => 1 + (Math.random() * 2 - 1) * 0.07;
+    const turn = [item, power, quant(best.vx * nz()), quant(best.vy * nz()), 0, "", Math.floor(Date.now() / 60000), 1 + rnd(3)];
+    const next = { ...g, T: [...g.T, turn] };
+    confirmedG = next; setG(next);
+  }
+  $("soloBtn").addEventListener("click", () => {
+    if (busy || picksSel[0].length !== 3) return;
+    if (location.hash !== "#solo") history.pushState(null, "", location.pathname + location.search + "#solo");
+    startSolo(false);
   });
 
   // ---------- start ----------
@@ -2722,8 +2791,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   function boot() {
     const seq = ++bootSeq;
     clearTimeout(pollT);
+    leaveSolo();
     room = null; me = null; busy = false; net = ""; fails = 0; play = null; g = null; rep = null;
     const h = (location.hash || "").replace(/^#/, "");
+    if (h === "solo") { startSolo(false); return; }
     const r = /^r\.([0-9a-z]{6,24})$/.exec(h);
     if (r) { openRoom(r[1], seq); return; }
     showSetup();
@@ -2736,7 +2807,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   // ---------- háčky pro testy (jen čtení a výpočet, nic nezapisují) ----------
   window.__pol = {
     info: () => ({ view, me, k: turnK(), shownK, playing: !!play, busy, canThrow: canThrow(), thrower: g ? thrower() : null,
-      hp: lastState() ? lastState().hp.slice() : null, shownHp: play ? play.hp.slice() : shownState().hp.slice(), over: overOf(), room: room && room.id, gn: g && g.gn, T: g && g.T.map(t => t.slice(0, 4)), seed: g && g.seed, m: g && g.m, rage: g && lastState() ? Pol.rageFor(g, lastState(), thrower()) : false, hat: g ? [hatOf(0), hatOf(1)] : null, selItem, selPower,
+      hp: lastState() ? lastState().hp.slice() : null, shownHp: play ? play.hp.slice() : shownState().hp.slice(), over: overOf(), solo, room: room && !solo ? room.id : null, gn: g && g.gn, T: g && g.T.map(t => t.slice(0, 4)), seed: g && g.seed, m: g && g.m, rage: g && lastState() ? Pol.rageFor(g, lastState(), thrower()) : false, hat: g ? [hatOf(0), hatOf(1)] : null, selItem, selPower,
       selDef, def: shownState().def.slice(), aiming: !!aim, man: !!man, fit: fitAll, cam: { x: cam.x, y: cam.y, s: cam.s }, goal: camGoal(), vis: visRect(), W, CW, CH, defS: defScale(), fx: fxLog.slice(), fxN: fxCount, fitHidden: $("fitBtn").hidden, fsHidden: $("fsBtn").hidden, hasFs: !!fsReq, a2hsOpen: !$("a2hs").hidden }),
     openA2hs,
     forceMod(m, w) { if (!g) return null; const next = { ...g, m }; if (w) next.w = w; setG(next); render(); return g.m; }, // jen pro testy vzhledu, nic nezapisuje do místnosti
