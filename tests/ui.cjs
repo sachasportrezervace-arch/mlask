@@ -1,4 +1,4 @@
-// Kontrola rozhraní na telefonu: dotykové cíle >= 44 px, tlačítka Celá obrazovka / Celá ulice, kamera (tah, štípnutí, Celá ulice),
+// Kontrola rozhraní na telefonu: dotykové cíle >= 44 px, tlačítka Celá obrazovka / Celá scéna, kamera (tah, štípnutí, Celá scéna),
 // pravidla gest na tahu i mimo tah, bez vodorovného posunu a bez překryvu HUD. Používá živý sync (mantledb.sh) jako duel.cjs.
 // node tests/ui.cjs [URL]
 const path = require("path"), fs = require("fs");
@@ -92,7 +92,7 @@ const layout = p => p.evaluate(() => {
     // dva prsty kolem středu c, vzdálenost z d0 na d1
     async function pinch(cx, cy, d0, d1) {
       await tdown(0, cx - d0 / 2, cy); await tdown(1, cx + d0 / 2, cy);
-      for (let u = 1; u <= 5; u++) { const d = d0 + (d1 - d0) * u / 5; await tmove(0, cx - d / 2, cy); await tmove(1, cx + d / 2, cy); }
+      for (let u = 1; u <= 10; u++) { const d = d0 + (d1 - d0) * u / 10; await tmove(0, cx - d / 2, cy); await tmove(1, cx + d / 2, cy); await new Promise(r => setTimeout(r, 20)); } // pomalejší gesto: pod zátěží se jinak slijí pohyby do jednoho snímku
       await tup(0); await tup(1);
       await new Promise(r => setTimeout(r, 300)); // kamera reaguje v dalším snímku, ať settle nevyhodnotí výchozí stav jako hotový
     }
@@ -128,8 +128,8 @@ const layout = p => p.evaluate(() => {
     const rect = id => P.evaluate(id => { const r = document.getElementById(id).getBoundingClientRect(); return { w: r.width, h: r.height }; }, id);
     const fs = await rect("fsBtn"), ft = await rect("fitBtn");
     check("tlačítko Celá obrazovka existuje a má >= 44 x 44", !i0.fsHidden && fs.w >= 43.5 && fs.h >= 43.5, `${Math.round(fs.w)}x${Math.round(fs.h)}`);
-    check("tlačítko Celá ulice existuje a má >= 44 x 44", !i0.fitHidden && ft.w >= 43.5 && ft.h >= 43.5, `${Math.round(ft.w)}x${Math.round(ft.h)}`);
-    check("Celá ulice: popisek", (await P.innerText("#fitTxt")) === "Celá ulice");
+    check("tlačítko Celá scéna existuje a má >= 44 x 44", !i0.fitHidden && ft.w >= 43.5 && ft.h >= 43.5, `${Math.round(ft.w)}x${Math.round(ft.h)}`);
+    check("Celá scéna: popisek", (await P.innerText("#fitTxt")) === "Celá scéna");
     bad = await audit(P);
     check("hra: všechny viditelné ovládací prvky >= 44 px", bad.length === 0, bad.join(", "));
     let lay = await layout(P);
@@ -175,22 +175,22 @@ const layout = p => p.evaluate(() => {
       check("kolečko myši: zoom k ukazateli", (await info(P)).cam.s > w0 * 1.1);
     }
 
-    // 5) Celá ulice
+    // 5) Celá scéna
     check("před Celou ulicí je ruční kamera zapnutá", (await info(P)).man === true);
     await P.click("#fitBtn");
     let iF = await info(P);
-    check("Celá ulice zruší ruční kameru", iF.man === false && iF.fit === true);
+    check("Celá scéna zruší ruční kameru", iF.man === false && iF.fit === true);
     await settle(P);
     iF = await info(P);
-    check("Celá ulice: vidět celá ulice od 0 do 1600", iF.vis.x0 <= 0 && iF.vis.x1 >= iF.W, `${Math.round(iF.vis.x0)} … ${Math.round(iF.vis.x1)}`);
-    check("Celá ulice: tlačítko říká Zpět", (await P.innerText("#fitTxt")) === "Zpět");
+    check("Celá scéna: vidět celá ulice od 0 do 1600", iF.vis.x0 <= 0 && iF.vis.x1 >= iF.W, `${Math.round(iF.vis.x0)} … ${Math.round(iF.vis.x1)}`);
+    check("Celá scéna: tlačítko říká Zpět", (await P.innerText("#fitTxt")) === "Zpět");
     await P.screenshot({ path: path.join(SHOTS, label.replace(/[^a-z0-9]+/gi, "-") + "-2-cela-ulice.png") });
     lay = await layout(P);
-    check("Celá ulice: bez překryvu a bez vodorovného posunu", lay.over.length === 0 && lay.sw <= lay.iw, lay.over.join(", "));
+    check("Celá scéna: bez překryvu a bez vodorovného posunu", lay.over.length === 0 && lay.sw <= lay.iw, lay.over.join(", "));
     await P.click("#fitBtn");
     await settle(P);
     iF = await info(P);
-    check("Zpět: výchozí kamera a popisek Celá ulice", iF.fit === false && iF.man === false && Math.abs(iF.cam.s - defS) < 0.003 && (await P.innerText("#fitTxt")) === "Celá ulice", `s ${iF.cam.s.toFixed(3)} (výchozí ${defS.toFixed(3)})`);
+    check("Zpět: výchozí kamera a popisek Celá scéna", iF.fit === false && iF.man === false && Math.abs(iF.cam.s - defS) < 0.003 && (await P.innerText("#fitTxt")) === "Celá scéna", `s ${iF.cam.s.toFixed(3)} (výchozí ${defS.toFixed(3)})`);
 
     // 6) Přidat na plochu / celá obrazovka
     if (!i0.hasFs) {
@@ -221,7 +221,7 @@ const layout = p => p.evaluate(() => {
     await sling(A, best.vx, best.vy, true);
     await P.waitForFunction(() => window.__pol.info().playing, null, { timeout: T });
     const iPlay = await info(P);
-    check("nový hod: ruční kamera i Celá ulice se zruší", iPlay.man === false && iPlay.fit === false && (await P.innerText("#fitTxt")) === "Celá ulice");
+    check("nový hod: ruční kamera i Celá scéna se zruší", iPlay.man === false && iPlay.fit === false && (await P.innerText("#fitTxt")) === "Celá scéna");
     await P.waitForFunction(() => { const i = window.__pol.info(); return i.shownK === 1 && !i.playing && i.canThrow; }, null, { timeout: T });
     await settle(P);
 

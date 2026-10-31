@@ -49,8 +49,8 @@ button{cursor:pointer}
 .track .f1{right:44px}
 .track .mid{position:absolute;left:50%;top:5px;bottom:5px;width:3px;margin-left:-1.5px;background:var(--ink);border-radius:2px}
 .track .n{position:absolute;top:4px;line-height:20px;font-size:14px;font-weight:700;color:#fff;background:var(--ink);border-radius:10px;padding:0 7px;font-variant-numeric:tabular-nums}
-.track .n0{left:46px}
-.track .n1{right:46px}
+.track .n0{left:52px}
+.track .n1{right:52px}
 .med{position:absolute;top:0;width:56px;height:56px;border-radius:50%;background:var(--tint,#DCE3FF);box-shadow:0 0 0 3px #fff;overflow:hidden;transition:transform .2s}
 .med canvas{width:56px;height:56px;display:block}
 #chip0{left:0}
@@ -59,6 +59,7 @@ button{cursor:pointer}
 .nm{position:absolute;top:38px;font-size:13px;font-weight:600;line-height:1.2;max-width:34%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nm0{left:62px}
 .nm1{right:62px;text-align:right}
+.hud.dark .nm{color:#fff}
 .hrow{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px}
 .tricks{display:flex;gap:6px;align-items:center;min-width:0}
 .tricks.r{justify-content:flex-end}
@@ -77,6 +78,7 @@ button{cursor:pointer}
 .wind b{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
 .banner{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 124px);transform:translateX(-50%);background:var(--ink);color:#fff;font-weight:600;padding:5px 18px 6px;border-radius:999px;font-size:16px;white-space:nowrap;pointer-events:none;max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis}
 .banner.pop{animation:pop .3s cubic-bezier(.3,1.6,.5,1)}
+.banner.quiet{opacity:0;transition:opacity .15s}
 @keyframes pop{from{transform:translateX(-50%) scale(.6);opacity:0}}
 @keyframes hurt{0%{translate:0 0}12%{translate:-6px 2px}32%{translate:5px -2px}52%{translate:-3px 1px}74%{translate:2px 0}100%{translate:0 0}}
 .med.hurt{animation:hurt .5s ease-out}
@@ -106,7 +108,7 @@ button{cursor:pointer}
 .dbtn small{font-size:11.5px;font-weight:500;color:var(--muted)}
 .dbtn:active svg{transform:scale(.92)}
 .dbtn[aria-pressed="true"] svg{box-shadow:0 0 0 3px var(--sand),0 0 0 6px var(--yellow);transform:translateY(-2px)}
-.hint{margin:0;font-size:15px;font-weight:500;color:var(--muted);line-height:1.3}
+.hint{text-wrap:pretty;margin:0;font-size:15px;font-weight:500;color:var(--muted);line-height:1.3}
 .hint b{color:var(--ink);font-weight:700}
 .tools{position:absolute;right:0;top:-2px;display:flex;gap:8px}
 .iconbtn{flex:0 0 auto;width:44px;height:44px;padding:0;display:grid;place-items:center;border:0;border-radius:50%;background:#fff;color:var(--ink)}
@@ -222,6 +224,11 @@ textarea.bubble{min-height:120px;resize:vertical;font-size:15px;line-height:1.4;
   .tools{top:2px}
   .notebox{grid-column:1/-1}
 }
+/* Velký desktop: větší společný pruh zdraví */
+@media (min-width:1200px) and (min-height:820px){
+  .hud{transform:scale(1.15);transform-origin:50% 0}
+  .banner{top:calc(env(safe-area-inset-top) + 140px)}
+}
 /* Mobil na šířku: dock vpravo */
 @media (orientation:landscape) and (max-height:540px){
   .app{grid-template-rows:none;grid-template-columns:minmax(0,1fr) 270px}
@@ -237,6 +244,7 @@ textarea.bubble{min-height:120px;resize:vertical;font-size:15px;line-height:1.4;
 /* Úzký displej na výšku: tlačítka nářadí leží nad řadou věcí, ne přes ni */
 @media (max-width:979px) and (orientation:portrait){
   #myTray>div:first-child .rrow{margin-top:28px}
+  .banner{top:auto;bottom:68px}
   .hint .hh{display:none}
   #end{padding-top:calc(env(safe-area-inset-top) + 124px)}
   .hint{font-size:14px}
@@ -245,8 +253,11 @@ textarea.bubble{min-height:120px;resize:vertical;font-size:15px;line-height:1.4;
 }
 @media (max-width:420px){
   .tk{width:44px;height:44px}
-  .wind{min-width:62px;padding:0 10px 0 8px}
-  .wind svg{width:26px}
+  .hrow{gap:4px}
+  .tricks{gap:2px}
+  .wind{min-width:0;padding:0 8px 0 6px;gap:4px}
+  .wind svg{width:22px}
+  .modic svg{width:20px;height:20px}
   .nm{max-width:30%}
 }
 @media (prefers-reduced-motion:reduce){
@@ -279,7 +290,7 @@ textarea.bubble{min-height:120px;resize:vertical;font-size:15px;line-height:1.4;
     <div class="banner" id="banner" hidden></div>
     <button type="button" class="stagebtn" id="skipBtn" hidden>Přeskočit</button>
     <button type="button" class="stagebtn" id="resultBtn" hidden>Výsledek</button>
-    <button type="button" class="stagebtn" id="fitBtn" aria-pressed="false" hidden><svg class="camico" viewBox="0 0 24 24" aria-hidden="true"><path id="fitIco" d="M3 5v14M21 5v14M7 12h10M7 12l3-3M7 12l3 3M17 12l-3-3M17 12l-3 3" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="fitTxt">Celá ulice</span></button>
+    <button type="button" class="stagebtn" id="fitBtn" aria-pressed="false" hidden><svg class="camico" viewBox="0 0 24 24" aria-hidden="true"><path id="fitIco" d="M3 5v14M21 5v14M7 12h10M7 12l3-3M7 12l3 3M17 12l-3-3M17 12l-3 3" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="fitTxt">Celá scéna</span></button>
   </div>
 
   <div class="dock" id="tray" hidden>
@@ -291,7 +302,7 @@ textarea.bubble{min-height:120px;resize:vertical;font-size:15px;line-height:1.4;
       </div>
       <div id="myTray" class="mine">
         <div><span class="gl">Hoď</span><div class="rrow" id="itemsRow"></div></div>
-        <div><span class="gl"><b>Uhni!</b> Tajně vyber, jak se bráníš před jeho dalším hodem.</span><div class="rrow" id="defRow"></div></div>
+        <div><span class="gl"><b>Uhni!</b> Tajně vyber, jak mu uhneš.</span><div class="rrow" id="defRow"></div></div>
         <p class="hint" id="hint"></p>
         <div class="notebox" id="noteBox" hidden>
           <input type="text" id="vzkaz" maxlength="40" placeholder="Vzkaz k hodu (nepovinné)" autocomplete="off" aria-label="Vzkaz k hodu">
@@ -467,7 +478,7 @@ textarea.bubble{min-height:120px;resize:vertical;font-size:15px;line-height:1.4;
     <button type="button" class="btn primary" id="endPrimary"></button>
     <button type="button" class="btn" id="endSecondary"></button>
     <p class="meta" id="endCaption" style="text-align:center"></p>
-    <button type="button" class="linkbtn" id="endScene" style="justify-self:start">Prohlédnout scénu</button>
+    <button type="button" class="linkbtn" id="endScene" style="justify-self:center">Prohlédnout scénu</button>
   </div>
 </div>
 
@@ -916,7 +927,7 @@ var Art = (function () {
       c.globalAlpha = 1; circ(c, 660, 300, 62); fill(c, "#FFF1BF"); circ(c, 688, 282, 54); fill(c, T.sky);
     } else if (kind === "beach") { circ(c, 700, 310, 72); fill(c, "#FFE27A"); }
     var dr = (t || 0) * 5;
-    cloud2(c, T, 560 + dr % 2400 - 400, Math.max(150, v.y0 + 100), 1.1); cloud2(c, T, 1180 + dr * 0.6, Math.max(270, v.y0 + 230), 0.8); cloud2(c, T, 240 + dr * 0.8, Math.max(340, v.y0 + 170), 0.7);
+    cloud2(c, T, 560 + dr % 2400 - 400, Math.max(150, v.y0 + 230), 1.1); cloud2(c, T, 1180 + dr * 0.6, Math.max(270, v.y0 + 330), 0.8); cloud2(c, T, 240 + dr * 0.8, Math.max(340, v.y0 + 290), 0.7);
     if (kind === "street") {
       // městská silueta místo kopců: dvě vrstvy plochých domů
       c.fillStyle = T.hill1; for (var b1 = 0; b1 < 9; b1++) c.fillRect(-40 + b1 * 190, 880 - (190 + hash(b1, 7) * 230), 150 + hash(b1, 8) * 40, 400);
@@ -962,7 +973,7 @@ var Art = (function () {
   function deco(c, d, T) {
     T = T || THEMES[0];
     if (d.t === "lamp") {
-      if (T.kind === "night") { circ(c, d.x, 438, 84); c.fillStyle = "#4A4E8E"; c.fill(); }
+      if (T.kind === "night") { c.beginPath(); c.moveTo(d.x - 20, 444); c.lineTo(d.x + 20, 444); c.lineTo(d.x + 120, 880); c.lineTo(d.x - 120, 880); c.closePath(); c.fillStyle = "rgba(255,226,138,.16)"; c.fill(); }
       c.fillStyle = P.slate; c.fillRect(d.x - 7, 450, 14, 430); rrect(c, d.x - 30, 424, 60, 28, 10); c.fill();
       c.fillStyle = P.yellow; rrect(c, d.x - 22, 432, 44, 12, 6); c.fill();
     } else if (d.t === "tree") {
@@ -1355,7 +1366,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   function startPlay(k) {
     const res = rep.results[k]; if (!res) return;
     const base = rep.states[k];
-    camAuto(); // nový hod: ruční kamera i „Celá ulice“ končí, kamera sleduje letící věc
+    camAuto(); // nový hod: ruční kamera i „Celá scéna“ končí, kamera sleduje letící věc
     // starší hody z fronty (soupeř hodil víc, než jsi viděl) běží rychleji, poslední hod vždy normálně
     const miss = !res.events.some(e => ((e.type === "hit" || e.type === "head" || e.type === "splash") && e.who === res.o) || e.type === "dodge" || e.type === "catch");
     play = { k, res, f: k === turnK() - 1 && res.t === me ? 0 : -22, ei: 0, hold: 52, lead: null, hp: base.hp.slice(), blocked: false, cake: [0, 0], pigeonS: -1, giftHit: false, speed: k < rep.results.length - 1 ? 1.6 : 1, miss, missShown: false, hit: false };
@@ -1526,7 +1537,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   let CW = 300, CH = 300, DPR = 1, camSnap = true;
   const cam = { x: W / 2, y: 520, s: 0.5 };
   let peekUntil = 0, peekX = 0, introPan = 0;
-  let man = null, fitAll = false; // ruční kamera {x,y,s} (tah/štípnutí/kolečko) a pohled „Celá ulice“
+  let man = null, fitAll = false; // ruční kamera {x,y,s} (tah/štípnutí/kolečko) a pohled „Celá scéna“
   let drawReady = false; // po prvním snímku: resize hned překreslí, aby plátno nezbělelo na jeden snímek
   function resize() {
     const r = $("stage").getBoundingClientRect();
@@ -1829,14 +1840,17 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     }
     ctx.globalAlpha = 1;
   }
+  // spodní hrana HUD převedená do světa (texty ani náhled dráhy pod lištu nezajedou)
+  function hudMinY() {
+    if ($("hud").hidden) return -1e9;
+    const cr = cv.getBoundingClientRect(), hb = $("hud").getBoundingClientRect().bottom;
+    return cr.height ? cam.y + ((hb - cr.top) / cr.height * CH + 10 - CH / 2) / cam.s : -1e9;
+  }
   function drawTexts() {
     ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
-    // texty nesmí zajet pod horní lištu: spodní hrana HUD převedená do světa
-    let minY = -1e9;
-    if (texts.length && !$("hud").hidden) {
-      const cr = cv.getBoundingClientRect(), hb = $("hud").getBoundingClientRect().bottom;
-      if (cr.height) minY = cam.y + ((hb - cr.top) / cr.height * CH + 10 - CH / 2) / cam.s;
-    }
+    // dokud na scéně křičí reakční slovo, pruh s hláškou ustoupí
+    $("banner").classList.toggle("quiet", texts.length > 0 || dragHintOn);
+    const minY = texts.length ? hudMinY() : -1e9;
     for (const tx of texts) {
       const u = tx.life / tx.max, sc = calm() ? 1 : u < 0.12 ? 0.4 + u / 0.12 * 0.8 : u < 0.22 ? 1.2 - (u - 0.12) * 2 : 1;
       ctx.globalAlpha = u > 0.78 ? (1 - u) / 0.22 : 1;
@@ -1884,8 +1898,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     renderHint();
   }
   // první hod na tomhle zařízení: ukázka, jak se táhne (dozadu a pusť), dokud hráč nehodí
-  let hinted = store.get(AIMED_KEY) === "1";
+  let hinted = store.get(AIMED_KEY) === "1", dragHintOn = false;
   function drawDragHint(L, t) {
+    dragHintOn = false;
     if (hinted || !canThrow() || aim || kb.on || view !== "play") return;
     const d = L.players[me].dir, C = calm();
     const u = C ? 0.6 : (t % 2.8) / 2.8, e = C ? 1 : 1 - Math.pow(1 - Math.min(1, u / 0.6), 3), al = u < 0.82 ? 1 : (1 - u) / 0.18;
@@ -1894,6 +1909,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     ctx.setLineDash([1, 12]); ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.strokeStyle = INK; ctx.lineWidth = 6; ctx.stroke(); ctx.setLineDash([]);
     circ(ctx, sx, sy, 11); Art.paint(ctx, INK, 0); circ(ctx, ex, ey, 14); Art.paint(ctx, P.yellow, 3.5);
     ctx.font = `600 22px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.lineWidth = 6; ctx.strokeStyle = INK;
+    dragHintOn = true;
     const hw = ctx.measureText("táhni dozadu a pusť").width + 36; Art.rrect(ctx, CW / 2 - hw / 2, sy + 150 - 22, hw, 44, 22); Art.fill(ctx, INK);
     ctx.fillStyle = P.white; ctx.fillText("táhni dozadu a pusť", CW / 2, sy + 150 + 1);
     ctx.restore();
@@ -1916,8 +1932,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     const Pl = L.players[me];
     const r = aimSim(v), preview = r ? r.frames.slice(0, g.m === 4 ? 17 : 47) : null;
     if (preview) {
+      const minY = hudMinY();
       for (let n = 1; n < preview.length; n += 2) {
         const p = preview[n][0]; if (!p || p[4] !== 0) break;
+        if (p[1] / U < minY) continue;
         ctx.globalAlpha = 1 - n / preview.length * 0.7;
         circ(ctx, p[0] / U, p[1] / U, Math.max(2.5, 7 - n * 0.1)); Art.fill(ctx, n % 4 === 1 ? P.white : INK);
         ctx.globalAlpha = 1;
@@ -1926,7 +1944,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
       ctx.font = `600 28px ${FONT}`; ctx.textAlign = "center"; ctx.fillStyle = INK; ctx.fillText("dort na očích, bez náhledu", Pl.x + Pl.dir * 40, Pl.y - 270);
     }
     const pw = Math.hypot(v.vx, v.vy) / VMAX, ang = Math.round(Math.atan2(-v.vy, Math.abs(v.vx)) * 180 / Math.PI);
-    const label = `${Math.round(pw * 100)} % · ${ang}° · ${aimType(v)}`;
+    const label = `${Math.min(100, Math.round(pw * 100))} % · ${ang}° · ${aimType(v)}`;
     aimLabel = label;
   }
   // údaje o hodu v rohu scény (obrazovkové souřadnice), aby je nikdy nepřekryla napnutá guma
@@ -1943,9 +1961,6 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     const x0 = aim.x0 - r.left, y0 = aim.y0 - r.top, D = dmax();
     let dx = aim.x1 - aim.x0, dy = aim.y1 - aim.y0; const len = Math.hypot(dx, dy);
     if (len > D) { dx *= D / len; dy *= D / len; }
-    // kruh dosahu končí pod horní lištou, aby nevedl přes ikony triků
-    ctx.save(); const hb = $("hud").hidden ? 0 : $("hud").getBoundingClientRect().bottom - r.top + 6; ctx.beginPath(); ctx.rect(0, hb, CW, CH - hb); ctx.clip();
-    ctx.setLineDash([2, 10]); ctx.lineCap = "round"; ctx.strokeStyle = "rgba(29,33,69,.22)"; ctx.lineWidth = 3; circ(ctx, x0, y0, D); ctx.stroke(); ctx.restore();
     ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + dx, y0 + dy);
     ctx.strokeStyle = INK; ctx.lineWidth = 11; ctx.stroke(); ctx.strokeStyle = aim.ok ? P.yellow : P.white; ctx.lineWidth = 5; ctx.stroke();
     circ(ctx, x0, y0, 8); Art.paint(ctx, P.white, 3.5); circ(ctx, x0 + dx, y0 + dy, 13); Art.paint(ctx, aim.ok ? P.yellow : P.white, 3.5);
@@ -2032,16 +2047,16 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     else if (k === "Enter" || k === " ") { ev.preventDefault(); kb.on = true; renderHint(); }
   });
 
-  // ---------- ruční kamera: posun, štípnutí, kolečko a „Celá ulice“ ----------
+  // ---------- ruční kamera: posun, štípnutí, kolečko a „Celá scéna“ ----------
   // Pravidla: na tahu jeden prst/myš míří prakem; dva prsty vždy posouvají a štípou (a ruší míření);
-  // mimo tah posouvá i jeden prst. Nový hod (startPlay) ruční kameru i „Celá ulice“ ukončí.
+  // mimo tah posouvá i jeden prst. Nový hod (startPlay) ruční kameru i „Celá scéna“ ukončí.
   const ptrs = new Map(); let gest = null;
   const FIT_ICO = "M3 5v14M21 5v14M7 12h10M7 12l3-3M7 12l3 3M17 12l-3-3M17 12l-3 3", BACK_ICO = "M10 6L4 12l6 6M4 12h10a6 6 0 0 1 6 6";
   let fitShown = null, fitLabel = null;
   function camUi() {
     const can = !!g && (view === "play" || view === "end") && CW / defScale() < W + 60; // když se ulice vejde i tak, není co přepínat
     if (can !== fitShown) { fitShown = can; $("fitBtn").hidden = !can; }
-    const lab = fitAll ? "Zpět" : "Celá ulice";
+    const lab = fitAll ? "Zpět" : "Celá scéna";
     if (lab !== fitLabel) { fitLabel = lab; $("fitTxt").textContent = lab; $("fitIco").setAttribute("d", fitAll ? BACK_ICO : FIT_ICO); $("fitBtn").setAttribute("aria-pressed", String(fitAll)); }
   }
   function camAuto() { if (!man && !fitAll) return; man = null; fitAll = false; if (calm()) camSnap = true; }
@@ -2201,6 +2216,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     const md = g.m | 0, mi = $("modIc");
     if (mi.dataset.m !== String(md)) { mi.dataset.m = String(md); mi.innerHTML = MODICONS[md] || ""; mi.hidden = !md; }
     mi.title = md ? `${Pol.MODS[md].name}: ${Pol.MODS[md].text}` : "";
+    $("hud").classList.toggle("dark", !!md && Pol.MODS[md].id === "night");
     $("wind").setAttribute("aria-label", (w === 0 ? "bezvětří" : `vítr ${a}`) + (md ? `, ${Pol.MODS[md].name}` : ""));
   }
   const itemBtns = [], defBtns = [];
@@ -2244,7 +2260,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     const it = ITEMS[selItem];
     const type = aimType;
     const v = aimVec();
-    const head = aim && aim.ok ? `<b>Pusť a hoď.</b> Síla ${Math.round(aim.pow * 100)} %, hod: ${type(v)}.` : aim ? "Táhni dál od místa, kde jsi začal(a)." : kb.on ? `<b>Šipky</b> míří, <b>Enter</b> hází. Hod: ${type(v)}.` : "<b>Táhni od sebe dozadu a pusť.</b>";
+    const head = aim && aim.ok ? "<b>Pusť a hoď.</b>" : aim ? "Táhni dál od místa, kde jsi začal(a)." : kb.on ? `<b>Šipky</b> míří, <b>Enter</b> hází. Hod: ${type(v)}.` : (hinted ? "<b>Táhni od sebe dozadu a pusť.</b>" : "");
     const extra = selPower ? `${POWERS[selPower].name}: ${POWERS[selPower].text}` : `${it.name}: ${it.text}`;
     h.innerHTML = `<span class="hh">${head}</span> <span>${extra.replace(/</g, "&lt;")}</span>`;
   }
@@ -2265,7 +2281,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
       itemBtns.forEach((b, i) => {
         const n = st.ammo[me][i];
         b.disabled = !(n > 0); b.setAttribute("aria-pressed", String(selItem === i));
-        b.querySelector(".am").textContent = i === 0 ? "∞" : String(n);
+        const am = b.querySelector(".am"); am.hidden = i === 0; am.textContent = String(n);
       });
       dockDefs.sync();
       [...$("stamps").children].forEach((b, k) => b.setAttribute("aria-pressed", String(draftStamp === k + 1)));

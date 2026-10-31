@@ -2,6 +2,15 @@
 
 PŘEVZATO 31. 10. – dodělává session na účtu P, jiná session sem nepíše.
 
+## 2026-10-31 večer – přestavba dokončena: Mlask!
+- **Hotovo:** převzatý stav přestavby (WIP 3fede6d) dotažen. Nový název **Mlask!**, twist Uhni!, plochý vektor, nový HUD, 5 prostředí (ulice, pláž, déšť, noc, park), Vztek, odměny v sérii.
+- **Opravy po design-eye (3 kola):** jména v noci bílá, sevřená horní řada HUD na 390 px, kužel lampy místo koule, banner na mobilu dole a mizí při reakčním slově i při ukázce míření, zrušen kruh síly, tečky dráhy ne přes HUD, dock bez zdvojené síly a bez odznaku ∞, čísla zdraví od avatarů, „Celá scéna“, mraky níž, HUD 1,15× na desktopu ≥1200×820, síla max 100 %.
+- **Verdikt design-eye:** kolo 3 „ANO profi indie hra po opravě překryvu docku na mobilu“; oprava (vrácený nadpis Hoď) ověřena renderem 390×844 `tests/shots/flow/mobil-04-miri.png`.
+- **Ověřeno lokálně (127.0.0.1:8797):** `uhni.cjs` 4/4, `mods.cjs` 12/12, `duel.cjs` A/B/C 25/25 (exit 0), `ui.cjs` 137/137 (exit 0), `series.cjs` 4/4 (3 bitvy: ulice → park → déšť, různý vítěz, vítr i odměny).
+- **Test:** gesto sevření v `ui.cjs` zpomaleno (10 kroků po 20 ms); pod zátěží ostatních her padalo i na nezměněném kódu.
+- **Rozhodnuto:** repo přejmenováno na `mlask`, do nového `polstarovka` jde přesměrování se zachováním `#r.<id>`; klíče mantledb (`polstarovka-<id>`) a `app:"polstarovka"` zůstávají kvůli rozehraným hrám.
+- **Otevřené:** dock na mobilu zabírá ~36 % výšky (přestavba na 2 řady), mraky občas za hlavami, doplňky postav těsně pod HUD na 1440×900, `shots.cjs` občas spadne v kroku desktop-09 (nástroj snímků, ne hra). NEOVĚŘENO: skutečný iPhone, chybový stav neplatného odkazu, ležatý mobil v design-eye.
+
 ## PŘEDÁVKA 2026-10-31 – kompletní přestavba (kontext plný)
 - **Zadání od Marka (přes session Piskvorky):** současný vzhled ani název se mu nelíbí. Chce „čistý plochý vektor jako reference, vlastní twist, vlastní design, UX/UI bez hnusu“.
   - Reference: nArtBox Boy vs Girl, `C:\Users\LEARTI~1\AppData\Local\Temp\claude\C--Users-le-artist-AppData-Roaming-Claude-scratch-workspaces-a6a7acfc-0a38-40ad-94ae-6ba230a3b53c-6a5adc0f-5814-4034-986e-41296f8d6841-scratch-2026-10-30-bcf3d5\922eab0b-50bc-40cb-b2dc-56155839c37f\images\4.png`. Nekopírovat.
