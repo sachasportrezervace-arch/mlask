@@ -74,7 +74,7 @@
     idle:   { lid: 0.18, brow: 0, tilt: 0, mouth: "smile", eye: "o" },
     aim:    { lid: 0.42, lid2: 0.75, brow: 2, tilt: 5, mouth: "tongue", eye: "o" },
     tense:  { lid: 0.22, brow: 4, tilt: 9, mouth: "grit", eye: "o", pupil: 0.8 },
-    scared: { lid: 0, brow: -8, tilt: -6, mouth: "o", eye: "wide" },
+    scared: { lid: 0, brow: 8, tilt: -9, mouth: "o", eye: "wide" },
     hit:    { brow: 6, tilt: -9, mouth: "ouch", eye: "shut" },
     weak:   { lid: 0.48, brow: -2, tilt: -8, mouth: "wavy", eye: "o", pupil: 0.7, sweat: 1 },
     ko:     { brow: -4, tilt: -6, mouth: "ko", eye: "x" },
@@ -157,7 +157,7 @@
     } else {
       // culíky nahoře do stran (pružiny), zadní se kreslí za hlavou
       for (var sdx = -1; sdx <= 1; sdx += 2) {
-        c.save(); c.translate(sdx * 34 + 2, -34); c.rotate(sdx * 0.55 + (sdx < 0 ? h1 : h2));
+        c.save(); c.translate(sdx * 42 + 2, -14); c.rotate(sdx * 1.2 + (sdx < 0 ? h1 : h2));
         c.beginPath(); c.moveTo(-9, 2); c.quadraticCurveTo(sdx * 6, -34, sdx * 26, -26); c.quadraticCurveTo(sdx * 38, -4, sdx * 12, 8); c.closePath(); paint(c, R.hair, OL);
         c.beginPath(); c.moveTo(sdx * 8, -12); c.quadraticCurveTo(sdx * 20, -20, sdx * 26, -12); line(c, IL, R.hair2);
         rrect(c, -8, -7, 16, 12, 5); paint(c, R.trim, IL);
@@ -170,7 +170,9 @@
       // stín pod ofinou
       c.save(); ell(c, 4, 10, 38, 34); c.clip(); c.fillStyle = R.skin2; c.fillRect(-40, -30, 90, 26); c.restore();
       // ofina: rovný střih se třemi zoubky
-      c.beginPath(); c.moveTo(-42, 8); c.quadraticCurveTo(-48, -44, 2, -46); c.quadraticCurveTo(50, -44, 46, 4); c.quadraticCurveTo(44, -6, 38, -8); c.lineTo(-34, -6); c.quadraticCurveTo(-40, -4, -42, 8); c.closePath(); paint(c, R.hair, OL);
+      var BG = function () { c.moveTo(47, 2); c.quadraticCurveTo(42, -8, 36, -16); c.lineTo(30, -26); c.lineTo(22, -14); c.lineTo(12, -28); c.lineTo(2, -14); c.lineTo(-8, -28); c.lineTo(-18, -14); c.lineTo(-28, -26); c.quadraticCurveTo(-38, -14, -43, 4); };
+      c.beginPath(); c.moveTo(-43, 4); c.quadraticCurveTo(-48, -44, 2, -46); c.quadraticCurveTo(50, -44, 47, 2); c.quadraticCurveTo(42, -8, 36, -16); c.lineTo(30, -26); c.lineTo(22, -14); c.lineTo(12, -28); c.lineTo(2, -14); c.lineTo(-8, -28); c.lineTo(-18, -14); c.lineTo(-28, -26); c.quadraticCurveTo(-38, -14, -43, 4); c.closePath(); fill(c, R.hair);
+      c.beginPath(); BG(); line(c, OL);
       c.beginPath(); c.moveTo(-26, -34); c.quadraticCurveTo(4, -42, 30, -32); line(c, IL, R.hair2);
     }
     // oči, obočí, nos, ústa
@@ -178,13 +180,13 @@
     if (f.cream) { creamFace(c, K); }
     else {
       eyeAt(c, R, K, ex1, ey, rx * 0.92, ry * 0.95, E, f, -1); eyeAt(c, R, K, ex2, ey, rx, ry, E, f, 1);
-      var by = K ? ey - ry - 7 : -17; // Radka: obočí kreslené přes ofinu
+      var by = K ? ey - ry - 7 : -8; // Radka: obočí kreslené přes ofinu
       brow(c, K, ex1 - 1, by, K ? 17 : 15, E, -1); brow(c, K, ex2 + 1, by, K ? 18 : 16, E, 1);
     }
     if (K) { // velký nos, přesahuje obrys
       c.beginPath(); c.moveTo(18, 4); c.quadraticCurveTo(46, 0, 44, 16); c.quadraticCurveTo(40, 26, 22, 20); c.closePath(); paint(c, R.skin, OL); c.beginPath(); c.arc(36, 15, 4, 0.2, 2.4); line(c, IL);
     } else {
-      ell(c, 21, 21, 6, 4.6); paint(c, R.skin2, IL);
+      c.beginPath(); c.moveTo(19, 22); c.quadraticCurveTo(27, 26, 21, 31); line(c, IL);
       for (var fr = 0; fr < 3; fr++) { circ(c, -18 + fr * 5, 20 + (fr % 2) * 3, 1.6); fill(c, "#D9826A"); circ(c, 30 + fr * 4, 20 + (fr % 2) * 3, 1.6); fill(c, "#D9826A"); }
     }
     if (E.blush) { c.globalAlpha = 0.55 * E.blush; ell(c, K ? -12 : -20, K ? 16 : 26, 8, 5); fill(c, "#FF7C8A"); ell(c, K ? 26 : 34, K ? 26 : 26, 7, 4.5); fill(c, "#FF7C8A"); c.globalAlpha = 1; }

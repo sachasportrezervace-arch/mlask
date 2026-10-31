@@ -2,9 +2,10 @@
   // pírko: zahnutý list s brkem; s = délka, rot = natočení, flip = zrcadlo
   function feather(c, x, y, s, rot, col) {
     c.save(); c.translate(x, y); c.rotate(rot);
-    c.beginPath(); c.moveTo(-s * 0.5, 0); c.quadraticCurveTo(-s * 0.1, -s * 0.34, s * 0.5, -s * 0.06); c.quadraticCurveTo(s * 0.05, s * 0.3, -s * 0.5, 0); c.closePath();
-    paint(c, col || P.white, Math.max(1.6, s * 0.075));
-    c.beginPath(); c.moveTo(-s * 0.62, s * 0.04); c.quadraticCurveTo(-s * 0.05, -s * 0.06, s * 0.42, -s * 0.06); line(c, Math.max(1.2, s * 0.05));
+    c.beginPath(); c.moveTo(-s * 0.46, 0); c.bezierCurveTo(-s * 0.3, -s * 0.5, s * 0.1, -s * 0.62, s * 0.5, -s * 0.2); c.lineTo(s * 0.4, -s * 0.08); c.lineTo(s * 0.5, s * 0.02); c.lineTo(s * 0.34, s * 0.08); c.bezierCurveTo(s * 0.1, s * 0.4, -s * 0.2, s * 0.34, -s * 0.46, 0); c.closePath();
+    paint(c, col || P.white, Math.max(2, s * 0.08));
+    c.beginPath(); c.moveTo(-s * 0.74, s * 0.1); c.quadraticCurveTo(-s * 0.1, -s * 0.04, s * 0.46, -s * 0.12); line(c, Math.max(1.8, s * 0.07));
+    c.beginPath(); c.moveTo(-s * 0.18, -s * 0.02); c.lineTo(-s * 0.02, -s * 0.22); c.moveTo(s * 0.08, -s * 0.08); c.lineTo(s * 0.18, -s * 0.28); line(c, Math.max(1.2, s * 0.04), "#C9C3E8");
     c.restore();
   }
   // obláček „puf“: shluk kruhů jednou obrysovou linkou (nejdřív obrys všech, pak výplň), u = 0..1 průběh
@@ -17,18 +18,16 @@
     c.fillStyle = P.ink; for (var j = 0; j < pts.length; j++) { circ(c, pts[j][0], pts[j][1], pts[j][2] + 3.6); c.fill(); }
     c.fillStyle = col || P.white; for (j = 0; j < pts.length; j++) { circ(c, pts[j][0], pts[j][1], pts[j][2]); c.fill(); }
   }
-  // impact frame: hvězda nárazu na 2–4 snímky (u 0..1), za postavou
+  // náraz: 5 krátkých čárek kolem místa dopadu (jen v obloučku od směru letu), u 0..1 – čárky se oddalují a zkracují
   function impact(c, x, y, r, u, rot) {
-    var k = u < 0.35 ? 1 : 1 - (u - 0.35) / 0.65; if (k <= 0) return;
+    var k = u < 0.2 ? 1 : 1 - (u - 0.2) / 0.8; if (k <= 0) return;
     c.save(); c.translate(x, y); c.rotate(rot || 0);
-    var pts = 9;
-    c.beginPath();
-    for (var i = 0; i < pts * 2; i++) { var a = i / (pts * 2) * TAU, q = i % 2 ? 0.42 : 0.86 + 0.24 * hash(i, 3); c.lineTo(Math.cos(a) * r * q * (0.7 + 0.3 * k), Math.sin(a) * r * q * (0.7 + 0.3 * k)); }
-    c.closePath(); c.globalAlpha = k; paint(c, P.white, 4);
-    c.beginPath();
-    for (i = 0; i < pts * 2; i++) { a = i / (pts * 2) * TAU + 0.18, q = i % 2 ? 0.22 : 0.5; c.lineTo(Math.cos(a) * r * q, Math.sin(a) * r * q); }
-    c.closePath(); fill(c, P.yellow);
-    c.globalAlpha = 1; c.restore();
+    for (var i = -2; i <= 2; i++) {
+      var a = Math.PI + i * 0.5, r0 = r * (0.62 + 0.5 * (1 - k)), r1 = r0 + r * 0.42 * k * (i % 2 ? 0.8 : 1);
+      var x0 = Math.cos(a) * r0, y0 = Math.sin(a) * r0, x1 = Math.cos(a) * r1, y1 = Math.sin(a) * r1;
+      seg(c, x0, y0, x1, y1, 11 * k + 3, P.ink); seg(c, x0, y0, x1, y1, 6.4 * k + 0.6, P.yellow);
+    }
+    c.restore();
   }
   // stopa letu: zužující se pruh za předmětem (pts od nejstaršího po nejnovější)
   function trail(c, pts, w, col, alpha) {
