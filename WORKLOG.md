@@ -13,6 +13,9 @@
 - **Ověřeno lokálně:**
   - `node tests/duel.cjs http://127.0.0.1:8797/ A`, `B` i `C`: vždy 20/20 PASS, exit 0. Režim C hraje Chromium na desktopu proti WebKitu s iPhonem 13 na šířku.
   - `node tests/ui.cjs …`: 137/137 PASS, exit 0.
+- **Ověřeno živě (commit 76ef173):**
+  - `node tests/duel.cjs https://sachasportrezervace-arch.github.io/polstarovka/ A`, `B` i `C`: vždy 20/20 PASS, exit 0.
+  - `node tests/ui.cjs` na stejné URL: 137/137 PASS, exit 0.
 - **Otevřené:**
   - Spuštěný souběžně s duely měl `ui.cjs` 135/137, chybělo gesto sevření a zoom kolečkem. Sám prošel, test je pod zátěží nestabilní.
   - Nevyřešená rizika ze sítě: mantledb nemá atomický zápis (compare-and-swap), zápis po ztracené odpovědi není idempotentní a zůstává nález v `setG`.
