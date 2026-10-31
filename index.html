@@ -225,6 +225,9 @@ textarea.bubble{min-height:120px;resize:vertical;font-size:15px;line-height:1.4;
 #a2hs ol{margin:0;padding:0;list-style:none;display:grid;gap:10px}
 #a2hs li{display:flex;gap:10px;align-items:center;font-weight:800;font-size:15.5px;line-height:1.3}
 #a2hs li svg{width:30px;height:30px;flex:0 0 auto}
+/* zásah: štítek zraněného se zatřese a na chvíli zrudne (translate se skládá s původním natočením štítku) */
+@keyframes hurt{0%{translate:0 0}12%{translate:-8px 2px;background-color:#F7A596}32%{translate:7px -2px}52%{translate:-4px 1px}74%{translate:2px 0}100%{translate:0 0}}
+.pchip.hurt{animation:hurt .5s ease-out}
 @media (pointer:coarse),(hover:none){
   .linkbtn,.stampbtn,details.how summary{min-height:44px}
   .linkbtn{min-width:44px}
@@ -893,7 +896,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     if (newGame) {
       play = null; endHidden = false; clearTimeout(endTimer); previewKey = "";
       shownK = opts.shownK != null ? opts.shownK : 0;
-      camSnap = true; parts.length = 0; texts.length = 0;
+      camSnap = true; parts.length = 0; texts.length = 0; stopT = 0; punch = 0;
       kids.forEach(k => { k.throwT = k.hitT = k.happyT = -9; });
     }
     if (play && play.k >= g.T.length) { play = null; }
@@ -913,7 +916,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     const res = rep.results[k]; if (!res) return;
     const base = rep.states[k];
     camAuto(); // nový hod: ruční kamera i „Celá ulice“ končí, kamera sleduje letící věc
-    play = { k, res, f: k === turnK() - 1 && res.t === me ? 0 : -26, ei: 0, hold: 70, lead: null, hp: base.hp.slice(), blocked: false, cake: [0, 0], pigeonS: -1, giftHit: false, speed: 1 };
+    // starší hody z fronty (soupeř hodil víc, než jsi viděl) běží rychleji, poslední hod vždy normálně
+    const miss = !res.events.some(e => (e.type === "hit" || e.type === "head" || e.type === "splash") && e.who === res.o);
+    play = { k, res, f: k === turnK() - 1 && res.t === me ? 0 : -22, ei: 0, hold: 52, lead: null, hp: base.hp.slice(), blocked: false, cake: [0, 0], pigeonS: -1, giftHit: false, speed: k < rep.results.length - 1 ? 1.6 : 1, miss, missShown: false, hit: false };
     const tn = res.turn, extras = [ITEMS[tn.i].name];
     if (tn.p) extras.push(POWERS[tn.p].name);
     banner(`${nameOf(res.t)} hází: ${extras.join(" + ")}`, true);
@@ -936,6 +941,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
   }
   function finishPlay() {
     if (!play) return;
+    skipped = false;
     const k = play.k;
     while (play.ei < play.res.events.length) fx(play.res.events[play.ei++], play, true);
     play = null; trail.length = 0;
@@ -948,11 +954,13 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     render();
     if (shownK < rep.results.length) setTimeout(queue, 350); else checkEnd();
   }
+  let skipped = false; // přeskočené přehrávání: bez oslavy, hned na výsledek
   function skipAll() {
     if (!play) return;
+    skipped = true;
     const target = rep.results.length;
     while (play) { const k = play.k; finishPlayQuiet(); if (k + 1 >= target) break; if (shownK < target) startPlay(shownK); }
-    parts.length = 0; texts.length = 0;
+    parts.length = 0; texts.length = 0; stopT = 0; punch = 0;
     render(); checkEnd();
   }
   function finishPlayQuiet() {
@@ -966,7 +974,14 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     const o = overOf();
     if (o.win != null) kids[o.win].happyT = nowS();
     if (view === "end") { render(); return; }
-    endTimer = setTimeout(() => { if (overOf() && caughtUp() && (view === "play")) show("end"); }, 900);
+    // konec zápasu: vítěz sype konfety (jednou za bitvu), pak teprve se otevře karta s výsledkem
+    if (o.win != null && celebrated !== g.gn && !skipped) {
+      celebrated = g.gn;
+      const P = layoutNow().players[o.win];
+      burst(P.x + P.dir * 30, P.y - 190, 34, "confetti", { sp: 7, up: 7, size: 9, life: 1.9 });
+    }
+    skipped = false;
+    endTimer = setTimeout(() => { if (overOf() && caughtUp() && (view === "play")) show("end"); }, 800);
   }
   const seenKey = () => "pol-seen-" + room.id;
   function saveSeen() { if (room && g) store.set(seenKey(), JSON.stringify({ gn: g.gn, k: shownK })); }
@@ -975,6 +990,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
   // ---------- efekty ----------
   const parts = [], texts = [], trail = [];
   let shake = 0;
+  // hit-stop (zastavení hry na pár snímků při zásahu) a úder kamery; jen prezentace, simulaci se nedotýkají
+  let stopT = 0, punch = 0, punchAt = { x: 0, y: 0 }, celebrated = -1;
+  const AIMED_KEY = "pol-aimed";
   let bubble = null; // { who, text, stamp, t }
   function say(who, text, stamp) { bubble = { who, text, stamp: STAMPS[stamp] || "", t: nowS() }; }
   function pop(x, y, text, color, size = 34, kind = "num") { texts.push({ x, y, text, color, size, kind, life: 0, max: kind === "sfx" ? 1.5 : 1.4, rot: kind === "sfx" ? (Math.random() - 0.5) * 0.3 : 0, seed: (Math.random() * 999) | 0 }); }
@@ -998,25 +1016,39 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     if (quiet) return;
     const C = calm();
     switch (e.type) {
-      case "launch": kids[e.who].throwT = nowS(); break;
+      case "launch":
+        kids[e.who].throwT = nowS();
+        if (e.s === 0) { burst(e.x, e.y + 6, 5, "dust", { sp: 2.4, up: 0.5, size: 9, life: 0.55 }); if (e.who === me) buzz(8); }
+        break;
       case "heal": pop(e.x, e.y, `+${e.d}`, "#7FD36B", 40); burst(e.x, e.y + 30, 6, "steam", { sp: 1, up: 2, size: 12, life: 1.4 }); break;
       case "hit": case "head": case "splash": {
-        kids[e.who].hitT = nowS();
-        if (e.who !== pl.res.t) kids[pl.res.t].happyT = nowS();
-        pop(e.x + (e.x > W / 2 ? 84 : -84), e.y - 40, String(e.d), "#E8432E", e.type === "head" ? 54 : 46);
-        pop(e.x, e.y - 150, e.type === "head" ? "DO HLAVY!" : e.type === "splash" ? "ŽBLUŇK!" : SFX[e.item], e.type === "head" ? "#FFE14D" : e.type === "splash" ? "#7CC8FF" : "#FFF4D6", e.type === "head" ? 58 : 50, "sfx");
-        if (e.type !== "splash") itemBurst(e.item, e.x, e.y, e.type === "head");
+        const head = e.type === "head", ko = pl.hp[e.who] <= 0;
+        // hit-stop: hra na chvíli zamrzne, postava se pak zhoupne až po zastavení (hitT je v budoucnu)
+        const stop = C ? 0 : ko ? 0.3 : head ? 0.12 : e.type === "splash" ? 0.06 : 0.085;
+        stopT = Math.max(stopT, stop);
+        kids[e.who].hitT = nowS() + stop; kids[e.who].hitBig = head || ko ? 1.3 : 1;
+        if (e.who !== pl.res.t) kids[pl.res.t].happyT = nowS() + stop;
+        pl.hit = true;
+        pop(e.x + (e.x > W / 2 ? 84 : -84), e.y - 40, String(e.d), "#E8432E", head ? 54 : 46);
+        pop(e.x, e.y - 150, ko ? "K.O.!" : head ? "DO HLAVY!" : e.type === "splash" ? "ŽBLUŇK!" : SFX[e.item], ko || head ? "#FFE14D" : e.type === "splash" ? "#7CC8FF" : "#FFF4D6", ko ? 78 : head ? 58 : 50, "sfx");
+        if (e.type !== "splash") itemBurst(e.item, e.x, e.y, head);
+        parts.push({ x: e.x, y: e.y, vx: 0, vy: 0, life: 0, max: 0.22, type: "flash", rot: Math.random() * 3, vr: 0, size: ko ? 84 : head ? 62 : 46 });
         if (e.item === 4 && e.who !== pl.res.t) pl.cake[e.who] = 1;
-        if (!C) shake = e.type === "head" ? 18 : 11;
+        if (!C) {
+          shake = ko ? 30 : head ? 20 : 12;
+          punch = ko ? 0.11 : head ? 0.075 : 0.05; punchAt = { x: e.x, y: e.y };
+          const chip = $("chip" + e.who); chip.classList.remove("hurt"); void chip.offsetWidth; chip.classList.add("hurt");
+        }
+        if (ko && !C) { pl.speed = Math.min(pl.speed, 0.55); pl.hold = Math.min(pl.hold, 34); } // poslední úder dohraj zpomaleně
         buzz(e.who === me ? 30 : 12);
         break;
       }
-      case "combo": pop(e.x, e.y - 190, `KOMBO ×${e.n}`, "#FF8A1E", 42, "sfx"); break;
+      case "combo": pop(e.x + (e.x > W / 2 ? -190 : 190), e.y - 110, `KOMBO ×${e.n}`, "#FF8A1E", 40, "sfx"); break;
       case "block": pl.blocked = true; pop(e.x, e.y - 60, "DEŠTNÍK!", "#FF8FB1", 38, "sfx"); burst(e.x, e.y, 10, "star", { sp: 4, size: 9, color: "#FFD1DC" }); break;
-      case "burst": burst(e.x, e.y, 24, "drop", { sp: 7, up: 3, size: 7, color: "#62B6FF" }); if (!C) shake = Math.max(shake, 5); break;
+      case "burst": missPop(e, pl); burst(e.x, e.y, 24, "drop", { sp: 7, up: 3, size: 7, color: "#62B6FF" }); if (!C) shake = Math.max(shake, 5); break;
       case "bounce": if (pl.res.turn.i === 3) pop(e.x, e.y - 30, Math.random() < 0.5 ? "kvák" : "boing", "#FFE066", 26); burst(e.x, e.y + 10, 4, "dust", { sp: 2, size: 9 }); break;
       case "thud": itemBurst(pl.res.turn.i, e.x, e.y, false); break;
-      case "land": burst(e.x, e.y + 14, 6, "dust", { sp: 2, size: 10 }); if (pl.res.turn.i === 4) burst(e.x, e.y, 12, "crumb", { sp: 4, size: 7 }); break;
+      case "land": missPop(e, pl); burst(e.x, e.y + 14, 6, "dust", { sp: 2, size: 10 }); if (pl.res.turn.i === 4) burst(e.x, e.y, 12, "crumb", { sp: 4, size: 7 }); break;
       case "pigeon": pl.pigeonS = e.s; pop(e.x, e.y - 50, "VRKÚ!", "#C9B6F2", 36, "sfx"); burst(e.x, e.y, 12, "feather", { sp: 4, size: 9, color: "#B9B7D6", life: 1.6 }); break;
       case "bonus": pl.giftHit = true; pop(e.x, e.y - 30, e.kind === "hp" ? `+${e.d} život` : `+1 ${ITEMS[e.item].name}`, "#7FD36B", 32); burst(e.x, e.y, 26, "confetti", { sp: 6, size: 8 }); break;
       case "split": burst(e.x, e.y, 10, "star", { sp: 3, size: 8, color: "#fff" }); break;
@@ -1024,6 +1056,13 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     renderHud();
   }
   const buzz = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch {} };
+  const MISS = ["MIMO!", "VEDLE!", "FÍÚ!"];
+  // hod, který nikoho netrefil: ať je to vidět (jinak mimo = ticho)
+  function missPop(e, pl) {
+    if (!pl.miss || pl.missShown || pl.blocked) return;
+    pl.missShown = true;
+    pop(e.x, Math.min(e.y, GROUND) - 64, MISS[(Math.random() * MISS.length) | 0], "#FFF4D6", 38, "sfx");
+  }
 
   // ---------- kamera a plátno ----------
   const cv = $("cv"), ctx = cv.getContext("2d");
@@ -1031,12 +1070,16 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
   const cam = { x: W / 2, y: 520, s: 0.5 };
   let peekUntil = 0, peekX = 0, introPan = 0;
   let man = null, fitAll = false; // ruční kamera {x,y,s} (tah/štípnutí/kolečko) a pohled „Celá ulice“
+  let drawReady = false; // po prvním snímku: resize hned překreslí, aby plátno nezbělelo na jeden snímek
   function resize() {
     const r = $("stage").getBoundingClientRect();
+    const sameW = Math.abs(r.width - CW) < 1;
     DPR = Math.min(2, window.devicePixelRatio || 1);
     CW = Math.max(1, r.width); CH = Math.max(1, r.height);
     cv.width = Math.round(CW * DPR); cv.height = Math.round(CH * DPR);
-    camSnap = true;
+    // změna jen výšky (zásobník se po hodu zmenší) se dojede plynule, ne skokem kamery
+    if (!(sameW && drawReady) || calm()) camSnap = true;
+    if (drawReady) draw(nowS());
   }
   new ResizeObserver(resize).observe($("stage"));
   resize();
@@ -1079,20 +1122,26 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
   let lastT = performance.now(), acc = 0;
   function frame(nowMs) {
     const dt = Math.min(0.1, (nowMs - lastT) / 1000); lastT = nowMs;
+    const frozen = stopT > 0; // hit-stop: simulace stojí, částice a písmo se jen plazí
+    if (frozen) stopT -= dt;
     if (play) {
-      acc += dt * 60 * play.speed;
+      if (!frozen) acc += dt * 60 * play.speed;
       let n = 0;
-      while (acc >= 1 && play && n++ < 12) { acc -= 1; stepPlay(); }
+      while (acc >= 1 && play && stopT <= 0 && n++ < 12) { acc -= 1; stepPlay(); }
     } else acc = 0;
-    tickParticles(dt);
+    if (punch) { punch *= Math.exp(-dt * (frozen ? 1.5 : 9)); if (punch < 0.002) punch = 0; }
+    tickParticles(frozen ? dt * 0.12 : dt);
     const goal = camGoal();
     camUi();
-    if (camSnap || man) { cam.x = goal.x; cam.y = goal.y; cam.s = goal.s; camSnap = false; }
+    // blízko cíle se kamera dosadí přesně (dojezd bez věčného „skoro“; skok pod 3 px)
+    const near = Math.abs(goal.s - cam.s) < 0.005 && Math.abs(goal.x - cam.x) < 4 && Math.abs(goal.y - cam.y) < 5;
+    if (camSnap || man || near) { cam.x = goal.x; cam.y = goal.y; cam.s = goal.s; camSnap = false; }
     else {
       const a = Math.min(1, dt * (play ? 5 : 3));
       cam.x += (goal.x - cam.x) * a; cam.y += (goal.y - cam.y) * Math.min(1, dt * 6); cam.s += (goal.s - cam.s) * Math.min(1, dt * 6);
     }
     draw(nowMs / 1000);
+    drawReady = true;
     requestAnimationFrame(frame);
   }
 
@@ -1102,8 +1151,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
   const rand = (i, k) => (Pol.h32(i, k) % 10000) / 10000;
   const city = [];
   for (let i = 0, x = -1500; x < W + 1500; i++) { const w = 80 + rand(i, 1) * 90; city.push({ x, w, h: 130 + rand(i, 2) * 210, roof: Pol.h32(i, 3) % 3 }); x += w + 16 + rand(i, 4) * 30; }
-  const clouds = Array.from({ length: 8 }, (_, i) => ({ x: rand(i, 5) * 2600, y: 40 + rand(i, 6) * 230, s: 0.55 + rand(i, 7) * 0.7, v: 4 + rand(i, 8) * 6 }));
-  const leaves = Array.from({ length: 14 }, (_, i) => ({ x: rand(i, 9) * W, y: 150 + rand(i, 10) * 700, p: rand(i, 11) * 6, c: ["#FF7FA8", "#FFE066", "#7FD36B", "#FFFFFF"][i % 4] }));
+  const clouds = Array.from({ length: 5 }, (_, i) => ({ x: rand(i, 5) * 2600, y: 40 + rand(i, 6) * 200, s: 0.55 + rand(i, 7) * 0.6, v: 0.5 + rand(i, 8) * 0.8 }));
 
   function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
   function ell(x, y, rx, ry, rot = 0) { ctx.beginPath(); ctx.ellipse(x, y, Math.abs(rx), Math.abs(ry), rot, 0, Math.PI * 2); }
@@ -1121,7 +1169,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke();
   }
   function rays(cx, cy, R, t, col, n = 26) {
-    const rot = calm() ? 0 : t * 0.035;
+    const rot = 0; // paprsky stojí: otáčející se pozadí za hodem rozptyluje oči
     ctx.fillStyle = col; ctx.beginPath();
     for (let i = 0; i < n; i++) {
       const a0 = rot + i * 2 * Math.PI / n, a1 = a0 + Math.PI / n;
@@ -1154,7 +1202,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     const v = visRect();
     let sx = 0, sy = 0;
     if (shake > 0.3) { sx = (Math.random() - 0.5) * shake; sy = (Math.random() - 0.5) * shake; shake *= 0.86; } else shake = 0;
-    ctx.setTransform(DPR * cam.s, 0, 0, DPR * cam.s, DPR * (CW / 2 - cam.x * cam.s + sx), DPR * (CH / 2 - cam.y * cam.s + sy));
+    // úder kamery: přiblížení ke zásahu, bod zásahu zůstává na místě
+    const ps = 1 + punch, pcx = punch ? punchAt.x - (punchAt.x - cam.x) / ps : cam.x, pcy = punch ? punchAt.y - (punchAt.y - cam.y) / ps : cam.y, s2 = cam.s * ps;
+    ctx.setTransform(DPR * s2, 0, 0, DPR * s2, DPR * (CW / 2 - pcx * s2 + sx), DPR * (CH / 2 - pcy * s2 + sy));
     const L = layoutNow();
     drawSky(v, t);
     drawCity(v);
@@ -1167,12 +1217,12 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     for (const j of [0, 1]) drawRailing(L, j);
     drawProjectiles(t);
     drawAim(L);
-    drawLeaves(v, t);
     drawParticles();
     drawTexts();
     drawBubble(L, t);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     drawOffscreen(L, v);
+    drawDragHint(L, t);
     drawRubber();
   }
 
@@ -1185,12 +1235,6 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     gr.addColorStop(0, "#FFE98F"); gr.addColorStop(0.4, "#FFB848"); gr.addColorStop(1, "#FF8A2E");
     ctx.fillStyle = gr; ctx.fillRect(0, 0, CW, CH);
     rays(cx, cy, far, t, "rgba(255,250,228,.36)", 22);
-    // rastr v rozích jako potisk komiksu
-    ctx.fillStyle = "rgba(232,67,46,.16)";
-    for (let y = 0; y < CH; y += 14) for (let x = (y / 14) % 2 ? 7 : 0; x < CW; x += 14) {
-      const d = Math.hypot(x - cx, y - cy) / far;
-      if (d > 0.45) { circ(x, y, Math.min(4.5, (d - 0.45) * 14)); ctx.fill(); }
-    }
     const k = Math.min(R.w / 900, R.h / 600);
     ctx.setTransform(DPR * k, 0, 0, DPR * k, DPR * cx, DPR * (R.y + R.h / 2));
     ctx.fillStyle = "rgba(180,80,20,.2)"; ell(-244, 240, 92, 16); ctx.fill(); ell(244, 240, 92, 16); ctx.fill();
@@ -1206,7 +1250,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     ctx.font = `92px ${FONT_FX}`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
     ctx.lineWidth = 14; ctx.strokeStyle = INK; ctx.strokeText("VS", 0, 6); ctx.fillStyle = "#E8432E"; ctx.fillText("VS", 0, 6);
     ctx.restore();
-    drawLogo(0, -205, 104, t);
+    drawLogo(0, -190, 104, t);
   }
   function drawLogo(x, y, size, t) {
     const text = "POLŠTÁŘOVKA";
@@ -1289,7 +1333,6 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     rr(bx - 4, p.y - 66, 218, 13, 6); paint("#E8543A", 4);
     const fb = j ? bx + 154 : bx;
     blob([[fb + 12, p.y - 98, 12], [fb + 28, p.y - 104, 13], [fb + 44, p.y - 97, 11]], "#5FBF4E", 3);
-    for (let i = 0; i < 3; i++) { circ(fb + 12 + i * 16, p.y - 110 + (i % 2) * 6, 6); paint(j ? "#FFE066" : "#FF6B8B", 2.5); }
     rr(fb, p.y - 92, 56, 30, 6); paint("#D9774A", 4);
   }
   function drawStreet(v) {
@@ -1318,7 +1361,6 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
         const cs = [[0, 0, 96], [-74, 60, 62], [76, 52, 66], [-30, 70, 60], [34, 74, 58]].map(([cx, cy, r]) => [x + cx * s + sway, d.cy + cy * s, r * s]);
         blob(cs, "#6CC551", 6);
         ctx.fillStyle = "#9BE07A"; for (const [cx, cy, r] of cs) { ell(cx - r * 0.3, cy - r * 0.38, r * 0.42, r * 0.26, -0.5); ctx.fill(); }
-        for (let i = 0; i < 6; i++) { circ(x + sway + (rand(d.x + i, 1) - 0.5) * 170 * s, d.cy + (rand(d.x + i, 2) - 0.3) * 110 * s, 7 * s); paint("#E8432E", 2.5); }
       } else if (d.t === "wall") {
         ctx.beginPath(); ctx.rect(d.x1, d.top, d.x2 - d.x1, GROUND - d.top); paint("#E5824E", 5);
         ctx.strokeStyle = "rgba(43,26,18,.28)"; ctx.lineWidth = 3; ctx.beginPath();
@@ -1326,7 +1368,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
         ctx.stroke();
         rr(d.x1 - 10, d.top - 14, d.x2 - d.x1 + 20, 18, 5); paint(CREAM, 5);
         const cx = d.x1 + 70, cy = d.top - 14;
-        const tail = calm() ? 0 : Math.sin(t * 2.4) * 8;
+        const tail = 0;
         ctx.beginPath(); ctx.moveTo(cx - 18, cy - 8); ctx.quadraticCurveTo(cx - 46, cy - 12 + tail, cx - 38, cy - 44); ink(13); ctx.strokeStyle = "#F59E3B"; ctx.lineWidth = 6; ctx.stroke();
         ell(cx, cy - 18, 22, 18); paint("#F59E3B", 4);
         ctx.beginPath(); ctx.moveTo(cx + 4, cy - 44); ctx.lineTo(cx + 6, cy - 62); ctx.lineTo(cx + 15, cy - 50); ctx.closePath(); paint("#F59E3B", 3);
@@ -1391,7 +1433,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
   const SKIN = "#FFD9B8", SKIN_D = "#F2B48F";
   function kidPose(j, t) {
     const k = kids[j], n = nowS(), C = calm();
-    let sq = C ? 0 : Math.sin(t * 2.2 + j * 2) * 0.014, lean = 0, jump = 0, arm = -1.15, mood = "grr", holding = false;
+    let sq = C ? 0 : Math.sin(t * 2.2 + j * 2) * 0.014, lean = 0, jump = 0, shove = 0, arm = -1.15, mood = "grr", holding = false;
     if (aim && me === j && canThrow()) {
       const pw = aim.pow;
       sq = 0.08 * pw; lean = -0.09 * pw;
@@ -1400,14 +1442,18 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     const st = n - k.throwT;
     if (st < 0.55) { const u = st / 0.55; sq = C ? 0 : -0.15 * Math.exp(-u * 4) * Math.cos(u * 11); arm = 0.5 - u * 1.4; lean = 0.09 * (1 - u); mood = "yell"; }
     const ht = n - k.hitT;
-    if (ht < 1.1) { const u = ht / 1.1; sq = C ? 0.08 * (1 - u) : 0.24 * Math.exp(-u * 4) * Math.cos(u * 15); lean = -0.2 * (1 - u); mood = "ouch"; }
+    if (ht < 1.1) { // ht < 0 = hit-stop: postava drží první, nejsilnější okamžik
+      const u = Math.max(0, ht) / 1.1, big = k.hitBig || 1;
+      sq = C ? 0.08 * (1 - u) : 0.34 * big * Math.exp(-u * 4) * Math.cos(u * 15); lean = -0.27 * big * (1 - u); mood = "ouch";
+      if (!C) { shove = (j ? 1 : -1) * 15 * big * Math.exp(-u * 5); jump = -9 * big * Math.exp(-u * 9); }
+    }
     else if (n - k.happyT < 1.6) mood = "happy";
     const o = overOf();
     if (o && caughtUp() && !play && !titleMode()) {
       if (o.win === j) { jump = C ? 0 : -Math.abs(Math.sin(t * 5)) * 22; mood = "happy"; arm = Math.PI * 0.55 + Math.sin(t * 10) * 0.2; }
       else if (o.win != null) mood = "dizzy";
     }
-    return { sq, lean, jump, arm, mood, holding };
+    return { sq, lean, jump, shove, arm, mood, holding };
   }
   function torsoPath() { ctx.beginPath(); ctx.moveTo(-21, -90); ctx.quadraticCurveTo(0, -97, 21, -90); ctx.lineTo(27, -34); ctx.quadraticCurveTo(0, -27, -27, -34); ctx.closePath(); }
   function drawKid(P, j, t, opts = {}) {
@@ -1418,7 +1464,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     const holdItem = opts.hold != null ? opts.hold : selItem;
     ctx.save(); ctx.translate(P.x, P.y);
     ctx.fillStyle = "rgba(43,26,18,.24)"; ell(0, -1, 40, 7); ctx.fill();
-    ctx.translate(0, pose.jump); ctx.scale(dir, 1); ctx.rotate(pose.lean); ctx.scale(1 + pose.sq, 1 - pose.sq);
+    ctx.translate(pose.shove || 0, pose.jump); ctx.scale(dir, 1); ctx.rotate(pose.lean); ctx.scale(1 + pose.sq, 1 - pose.sq);
     // nohy
     rr(-16, -38, 13, 34, 6); paint(C.pants, 4); rr(3, -38, 13, 34, 6); paint(C.pants, 4);
     ell(-10, -5, 14, 8); paint(C.shoe, 4); ell(13, -5, 14, 8); paint(C.shoe, 4);
@@ -1596,16 +1642,6 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
       drawItem(ctx, i, x, y, r, rot, i === 2 ? t : 0, p[4] === 1);
     }
   }
-  function drawLeaves(v, t) {
-    if (calm()) return;
-    const w = windNow();
-    for (const l of leaves) {
-      const x = ((l.x + t * (w * 22 + 4) + 99999 * W) % (W + 600)) - 300;
-      const y = l.y + Math.sin(t * 1.6 + l.p) * 26;
-      ctx.save(); ctx.translate(x, y); ctx.rotate(t * 2 + l.p);
-      ctx.fillStyle = l.c; ctx.beginPath(); ctx.ellipse(0, 0, 9, 4.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-    }
-  }
   function tickParticles(dt) {
     const w = windNow();
     for (let i = parts.length - 1; i >= 0; i--) {
@@ -1614,6 +1650,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
       const k = dt * 60;
       if (p.type === "feather" || p.type === "paper") { p.vx = p.vx * 0.94 + w * 0.03; p.vy = p.vy * 0.9 + 0.12; p.x += (p.vx + Math.sin(p.life * 6 + p.rot) * 1.4) * k; }
       else if (p.type === "steam") { p.vy = -1.2; p.x += Math.sin(p.life * 5 + p.rot) * 0.6 * k; }
+      else if (p.type === "flash") { p.vy = 0; }
       else { p.vy += 0.32 * k; p.x += p.vx * k; }
       p.y += p.vy * k; p.rot += p.vr * k;
     }
@@ -1631,6 +1668,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
       else if (p.type === "star") { drawStar(0, 0, p.size, p.color || "#FFE066"); }
       else if (p.type === "confetti") { ctx.fillStyle = ["#FFD23A", "#FF4F86", "#2EC4B6", "#2F7DE1"][Math.floor(p.size * 10) % 4]; ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2); }
       else if (p.type === "steam") { ctx.fillStyle = "rgba(255,255,255,.6)"; circ(0, 0, p.size * (0.5 + p.life)); ctx.fill(); }
+      else if (p.type === "flash") { const u = p.life / p.max; ctx.globalAlpha = 1 - u * 0.6; burstPath(0, 0, p.size * (0.55 + u * 0.7), p.size * (0.55 + u * 0.7), 9, 3); paint(u < 0.4 ? "#FFFFFF" : "#FFE14D", 5 * (1 - u)); }
       else { ctx.fillStyle = "rgba(255,240,214,.75)"; circ(0, 0, p.size * (0.6 + p.life)); ctx.fill(); ctx.strokeStyle = "rgba(43,26,18,.35)"; ctx.lineWidth = 2; ctx.stroke(); }
       ctx.restore();
     }
@@ -1695,6 +1733,20 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     aim.pow = Math.min(1, len / D); aim.ok = len >= 20;
     aim.angle = Math.atan2(-aim.vy, Math.abs(aim.vx));
     renderHint();
+  }
+  // první hod na tomhle zařízení: ukázka, jak se táhne (dozadu a pusť), dokud hráč nehodí
+  let hinted = store.get(AIMED_KEY) === "1";
+  function drawDragHint(L, t) { // v souřadnicích obrazovky, uprostřed prázdné scény (ne přes postavu)
+    if (hinted || !canThrow() || aim || kb.on || view !== "play") return;
+    const d = L.players[me].dir, C = calm();
+    const u = C ? 0.6 : (t % 2.8) / 2.8, e = C ? 1 : 1 - Math.pow(1 - Math.min(1, u / 0.6), 3), al = u < 0.82 ? 1 : (1 - u) / 0.18;
+    const sx = CW / 2 + d * 70, sy = CH * 0.4 - 40, ex = sx - d * 140 * e, ey = sy + 100 * e;
+    ctx.save(); ctx.globalAlpha = al; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.setLineDash([1, 11]); ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.stroke(); ctx.setLineDash([]);
+    circ(sx, sy, 8); paint(PAPER, 3.5); circ(ex, ey, 13); paint("#FFE14D", 3.5);
+    ctx.font = "700 30px Caveat, cursive"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.lineWidth = 7; ctx.strokeStyle = INK;
+    ctx.strokeText("táhni dozadu a pusť", CW / 2, sy + 150); ctx.fillStyle = CREAM; ctx.fillText("táhni dozadu a pusť", CW / 2, sy + 150);
+    ctx.restore();
   }
   function drawAim(L) {
     if (!canThrow()) return;
@@ -1899,6 +1951,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     const len = g.T.length, gn = g.gn;
     const next = { ...g, T: [...g.T, turn] };
     $("vzkaz").value = ""; draftStamp = 0; selPower = 0; kb.on = false; bubble = null;
+    if (!hinted) { hinted = true; store.set(AIMED_KEY, "1"); }
     setG(next);
     const ok = await commit(next, cur => cur.gn === gn && cur.T.length === len, "Mezitím se hra změnila, hod se nezapsal.");
     if (!ok) { $("vzkaz").value = note; draftStamp = stamp; render(); }
@@ -1908,8 +1961,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
   function banner(text, popIt) {
     const b = $("banner");
     if (!text) { b.hidden = true; return; }
+    const changed = b.hidden || b.textContent !== text;
     b.textContent = text; b.hidden = false;
-    if (popIt && !calm()) { b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); }
+    if (popIt && changed && !calm()) { b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); }
   }
   function renderHud() {
     const on = !!g && (view === "play" || view === "end");
@@ -2015,8 +2069,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     let text, meta = "";
     const opp = me === null ? null : 1 - me;
     $("claims").hidden = me !== null;
-    $("waitDot").hidden = me === null || !!overOf();
-    if (overOf()) { const o = overOf(); text = o.draw ? "Remíza." : `${nameOf(o.win)} ${past(o.win, "vyhrál")}.`; }
+    const over = caughtUp() ? overOf() : null; // výsledek se neprozradí, dokud poslední hod nedoletí
+    $("waitDot").hidden = me === null || !!over;
+    if (over) { const o = over; text = o.draw ? "Remíza." : `${nameOf(o.win)} ${past(o.win, "vyhrál")}.`; }
     else if (play) { text = `Letí to od: ${nameOf(play.res.t)}…`; }
     else if (me === null) {
       text = "Přihlížíš.";
@@ -2044,7 +2099,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = Pol;
     $("resultBtn").hidden = !(view === "end" && endHidden);
     if (g && !play && (view === "play" || view === "end")) {
       const ev = overOf() ? 0 : Pol.eventInfo(g.seed, turnK()).type;
-      banner(["", "Holub na trase!", "Poryv větru!", "Bonusový balónek. Tref ho!"][ev]);
+      const evText = ["", "Holub na trase!", "Poryv větru!", "Bonusový balónek. Tref ho!"][ev];
+      banner(canThrow() ? (evText ? "Tvůj hod. " + evText : "Tvůj hod!") : evText, canThrow()); // na tahu je to vidět i na plátně
     }
     if (view === "setup") renderSetup();
     if (view === "intro") renderIntro();

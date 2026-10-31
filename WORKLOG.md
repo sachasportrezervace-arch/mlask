@@ -1,5 +1,35 @@
 # Pracovní deník – Polštářovka
 
+## PŘEDÁVKA 2026-10-31 – kompletní přestavba (kontext plný)
+- **Zadání od Marka (přes session Piskvorky):** současný vzhled ani název se mu nelíbí. Chce „čistý plochý vektor jako reference, vlastní twist, vlastní design, UX/UI bez hnusu“.
+  - Reference: nArtBox Boy vs Girl, `C:\Users\LEARTI~1\AppData\Local\Temp\claude\C--Users-le-artist-AppData-Roaming-Claude-scratch-workspaces-a6a7acfc-0a38-40ad-94ae-6ba230a3b53c-6a5adc0f-5814-4034-986e-41296f8d6841-scratch-2026-10-30-bcf3d5\922eab0b-50bc-40cb-b2dc-56155839c37f\images\4.png`. Nekopírovat.
+  - Styl: málo prvků, velké ploché plochy, jednoduché pozadí (obloha, kopce nebo písek), žádné paprsky, textury ani dekorace. Postavy velké, vtipné výrazem tváře (karikatura, ne generické chibi).
+  - HUD: jeden společný pruh zdraví nahoře s hlavičkami obou hráčů, power-upy jako kulaté ikony vlevo a vpravo, vítr uprostřed, tečkovaný oblouk míření, nic víc. Humor ve hře (reakce na zásah, hlášky), ne v nadpisech.
+- **Postup podle Marka:**
+  1. Nový krátký vtipný český název.
+  2. Twist.
+  3. Nejdřív 2 statické SVG návrhy herní obrazovky (mobil na výšku i desktop). Porovnat s `agent-skills/skills/mark-design-taste-lens/SKILL.md` a referencí, posoudit agentem design-eye a vybrat lepší.
+  4. Pak přestavět celou hru včetně úvodu, výzvy a výsledku. Vše vektor, žádné rastry.
+- **Před nasazením:**
+  - game-feel test ve 2 prohlížečích;
+  - design-eye s verdiktem „profi indie“ a anti-slop seznamem (bez emoji, výchozích fontů a dekorací, sjednocená zaoblení, stíny a odsazení, dotažené stavy), max 3 kola;
+  - živý test, screenshoty.
+- **Rozhodnutý twist „Uhni!“:**
+  - Po vlastním hodu hráč tajně zvolí obranu proti dalšímu soupeřovu hodu: přikrčit, uskočit nebo chytit. Každá volba poráží jiné typy hodů, žádná není dominantní. Při dopadu se odhalí komiksovým momentem.
+  - Sync: 8. prvek tahu `T`; tahy se 7 prvky = bez obrany. Engine s obranou 0 musí dát totožný výsledek kvůli zpětné kompatibilitě rozehraných her. První hod: obranu volí obránce při založení nebo přijetí výzvy (např. `g.rx`).
+  - Vyřazené: „munice se vrací“ (subtilní, projeví se až po kolech), „pevnost z polštářů“ (bez interakce mezi hráči).
+- **Co zůstává:**
+  - Deterministický engine `<script id="engine">` (celá čísla) a sync mantledb `{app,g,v,s0,s1,u}`.
+  - Opravy z revize Codexu: `decodeG`, `docOk`, `opStale`.
+  - Fullscreen, posun, sevření, „Celá ulice“, manifest a ikony.
+  - Testy `tests/duel.cjs` A/B/C a `tests/ui.cjs`.
+  - Kreslení (`drawTitle`, `drawKid`, `drawHouse`, `drawItem`, `drawTexts`) a CSS se celé nahradí.
+- **Stav:**
+  - Commit 76ef173 + deník je živě na https://sachasportrezervace-arch.github.io/polstarovka/: duel A/B/C 20/20 a ui 137/137, exit 0.
+  - Lokálně jsou možné neuložené úpravy z běžícího ladění pocitu (agent playtestu); jeho nálezy jsou v poznámce `polstarovka.md` ve sdílených poznámkách.
+  - Při přejmenování založit nové repo, nebo přejmenovat, a ponechat přesměrování.
+- **Server:** `python -m http.server 8797` ve složce. Playwright je v `%APPDATA%/npm/node_modules/playwright`. Push přes `git -c credential.helper= -c credential.helper='!gh auth git-credential' push`.
+
 ## 2026-10-31 – komiksový vzhled, fullscreen, posun a zoom
 - **Hotovo:**
   - **Vzhled:** vlastní komiksový vzhled ve stylu chibi. Kluk s kšiltovkou a holka s copem, tlusté obrysy, teplé paprsky, pastelové domy. Úvodní scéna VS s logem. Komiksové výbuchy se slovy PLESK!, ŽBLUŇK! a DO HLAVY!.
