@@ -2,6 +2,7 @@
 // node tests/duel.cjs [URL] [A|B]
 //   A = Chromium desktop (myš) proti WebKit iPhone 13 (dotyk)
 //   B = WebKit desktop (myš) proti Chromium Pixel 7 (dotyk přes CDP)
+//   C = Chromium desktop (myš) proti WebKit iPhone 13 na šířku (844 x 390, dotyk)
 // Determinismus: po každém hodu se porovnají životy na obou stranách a na konci i s přepočtem v Node (engine z index.html).
 const path = require("path"), fs = require("fs"), vm = require("vm");
 const PW = process.env.PW || path.join(process.env.APPDATA || "", "npm/node_modules/playwright");
@@ -28,9 +29,12 @@ function loadEngine() {
 
 (async () => {
   const bChr = await chromium.launch(), bWk = await webkit.launch();
+  const DESK = { viewport: { width: 1280, height: 760 } };
   const cfg = MODE === "A"
-    ? { A: [bChr, { viewport: { width: 1280, height: 760 } }, "chromium-desktop"], B: [bWk, { ...devices["iPhone 13"] }, "webkit-iphone"] }
-    : { A: [bWk, { viewport: { width: 1280, height: 760 } }, "webkit-desktop"], B: [bChr, { ...devices["Pixel 7"] }, "chromium-pixel"] };
+    ? { A: [bChr, DESK, "chromium-desktop"], B: [bWk, { ...devices["iPhone 13"] }, "webkit-iphone"] }
+    : MODE === "C"
+      ? { A: [bChr, DESK, "chromium-desktop"], B: [bWk, { ...devices["iPhone 13 landscape"] }, "webkit-iphone-landscape"] }
+      : { A: [bWk, DESK, "webkit-desktop"], B: [bChr, { ...devices["Pixel 7"] }, "chromium-pixel"] };
   const ctxA = await cfg.A[0].newContext(cfg.A[1]), ctxB = await cfg.B[0].newContext(cfg.B[1]);
   const A = await ctxA.newPage(), B = await ctxB.newPage();
   console.log(`režim ${MODE}: A = ${cfg.A[2]}, B = ${cfg.B[2]}, URL ${URL}`);
