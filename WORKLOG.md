@@ -4,6 +4,12 @@ PŘEVZATO 31. 10. 19:35 – redesign postav a efektů z Markova zadání, sessio
 
 PŘEVZATO 31. 10. – dodělává session na účtu P, jiná session sem nepíše.
 
+## 2026-10-31 – napojení na Hernu (session na účtu P)
+- **Hotovo:** `<meta name="herna-protokol" content="1">` a adresa `#herna=1&m=…&r=…&seat=0|1&names=A,B&zaklada=0|1` (`parseHerna`, `hernaOpen`, `hernaStav`, `doHerny` v `index.html`). Bez výzvy a setupu: `zaklada=1` založí dokument `polstarovka-<r>/hra` (stejné klíče jako dřív) se jmény, seed, prostředím přes `Pol.pickMod`, náhodným začínajícím, náhodnou první obranou `rx` a náhodnými triky, bez sázky; `zaklada=0` čeká a sedne si sám. Sedadlo = hráč v `g`, takže `vitez` = `o.win`. Dokud nesedí oba, nehází se. Rodiči jde `pripraveno`, `stav` (ceka/hraje/konec), jeden `vysledek` na bitvu (`partie` = `r:gn`) a „Jiná hra“ (na konci bitvy místo odkazu a „Uznat porážku“). Skryté: výzva, sdílení, „Zkusit sám“, nová hra, kopie odkazu. Bez platného `#herna` beze změny.
+- **Ověřeno lokálně (127.0.0.1:8797):** `tests/herna.cjs` http://127.0.0.1:8797/ http://127.0.0.1:8890/ 30/30 (maketa rodiče + skutečná Herna lokálně), exit 0; `uhni` 4/4, `mods` 12/12, `duel A` 25/25, `solo` 42/42, `ui` 137/137, vše exit 0.
+- **Nasazeno (a7bd6e3), živě:** `node tests/herna.cjs https://sachasportrezervace-arch.github.io/mlask/ https://sachasportrezervace-arch.github.io/herna/` 30/30, exit 0 (Mark Chromium desktop, Radka WebKit iPhone 13, místnost, výběr Mlasku, partie, skóre v liště, Jiná hra); `node tests/duel.cjs https://sachasportrezervace-arch.github.io/mlask/ A` 25/25, exit 0.
+- **Otevřené / NEOVĚŘENO:** skutečný iPhone a mobil na šířku v iframe Herny, `fsBtn` (fullscreen) uvnitř iframe, `series`/`ui` živě, pohlaví postavy se tipuje z koncovky jména (-a = holka, pár výjimek), protože protokol pohlaví nezná; remíza (`vitez: null`) jen z kódu, ne z testu.
+
 ## 2026-10-31 – sólo režim „Zkusit sám“ / #solo (session na účtu P)
 - **Hotovo:** tlačítko „Zkusit sám“ vedle „Založit výzvu“ a adresa `#solo`: partie proti botovi (36 náhodných hodů, vybere nejlepší a přidá šum ±7 %, trefí asi 35 %, hází s pauzou ~1,2 s), bez sync, místnosti a odkazu, mimo sérii a kosmetiku (`startSolo`, `botMaybe`, `botThrow`). V HUD je „Bot(ka) · trénink“, na konci „Znovu“ a „Vyzvat soupeře“. Prostředí se losuje přes `Pol.pickMod`.
 - **Ověřeno lokálně:** `tests/solo.cjs` 42/42 (Chromium desktop + WebKit iPhone 13, 0 požadavků na mantledb, beze změny localStorage), uhni 4/4, mods 12/12, duel A 25/25, ui 137/137, vše exit 0.
