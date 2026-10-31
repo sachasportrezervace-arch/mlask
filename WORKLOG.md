@@ -10,6 +10,14 @@ PŘEVZATO 31. 10. – dodělává session na účtu P, jiná session sem nepíš
 - **Nasazeno (ad5b85f), živě:** `node tests/solo.cjs https://sachasportrezervace-arch.github.io/mlask/` 42/42, exit 0.
 - **Otevřené:** když začíná bot, první obrana hráče je náhodná; test hraje dokonalým řešičem, takže partie jsou krátké.
 
+## 2026-10-31 20:55 – redesign postav a efektů hotov (session mlask-vizual)
+- **Hotovo:** rig z dílů s pivoty (`Art.char`, `Art.head`, výrazy, pružiny vlasů a lemu) a nové efekty (`Art.feather/poof/impact/trail/dust`) jsou v `index.html`; návrh a model sheet v `design/rig-navrh/`. Marek vytáhlý s velkým nosem, Radka kulatá s ofinou a culíky.
+- **Animace (`buildPose`):** nádech a mrkání, nápřah při míření, hod (švih s protažením a dokmit), reakce na zásah podle poškození (`hitBig`), málem K.O. při ≤ 25 životech (třes, pot), K.O. = závrať a přehození přes zábradlí (kreslí se po `balconyFront`), vítěz skáče s pěstí, posměšek s dlouhým nosem po úhybu a minutí.
+- **Efekty:** střídmé peří (3-4 kusy, létá od zásahu nahoru a ven), náraz (5 čárek) a obláček za postavou, hit-stop, jemný otřes jen u hlavy a K.O., stopa letu jako zužující se pruh, prach při dopadu. Zrušeny všechny texty přes hru (PLESK, MIMO, DOLŮ, špatný tip, +život, kvák, KOMBO, VZTEK, DEŠTNÍK); banner nad scénou se ve hře schovává; po konci bitvy drží kamera poraženého a karta výsledku přijde po 2,6 s. Zábradlí vizuálně sníženo na 48 px (engine beze změny), aby byl vidět trup.
+- **Ověřeno lokálně (127.0.0.1:8963):** `uhni` 4/4, `mods` 12/12, `duel` A, B, C 25/25, `series` 4/4, `solo` 42/42, `ui` 137/137 (jednou 135/137: sevření a kolečko, známá nestabilita pod zátěží, příští běh 137/137). Série snímků: `node tests/anim.cjs URL out` → `tests/shots/anim-r6`.
+- **design-eye:** model sheet OK s výhradami (opraveno), živý build kolo 1 a 2 OK s výhradami, kolo 3 „NE, zbývá pointa K.O.“; po něm opravena silueta K.O. a póza výhry (render `anim-r6` zkontrolován očima, design-eye už neběželo, max 3 kola).
+- **Otevřené / NEOVĚŘENO:** razítkované rendery, skutečný iPhone, ležatý mobil v design-eye, mobil kdy prohraje hráč, kamera na vítěze před kartou, spodní lišta opakuje „vyhrál“.
+
 ## PŘEDÁVKA 2026-10-31 19:45 – redesign postav a efektů (session mlask-vizual, kontext plný)
 - **Zadání (Mark přes session herny):** postavy, animace a efekty jsou „slop“ – přepracovat od základu na úroveň profi indie hry (reference nArtBox Boy vs Girl, plochý vektor, humor ve výrazech). Logiku, sync, mody a testy neměnit, jen kvůli vykreslení.
 - **Hotovo (návrh, ne v `index.html`):** `design/rig-navrh/`

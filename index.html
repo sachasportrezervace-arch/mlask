@@ -998,139 +998,316 @@ var Art = (function () {
   function balconyFront(c, L, j, th) {
     var T = theme(th), p = L.players[j], d = p.dir, x = function (a) { return d > 0 ? a : 1600 - a; };
     var dk = j ? T.hrd : T.hld, pn = j ? T.hpr : T.hpl, a = Math.min(x(140), x(350));
-    c.fillStyle = pn; c.fillRect(a, p.y - 62, 210, 62 + 4);
-    c.fillStyle = dk; rrect(c, a - 6, p.y - 64, 222, 14, 7); c.fill();
+    c.fillStyle = pn; c.fillRect(a, p.y - 48, 210, 48 + 4);
+    c.fillStyle = dk; rrect(c, a - 6, p.y - 50, 222, 14, 7); c.fill();
   }
 
-  // ---------- obličej ----------
-  function spiral(c, cx, cy, r, turns, flip) {
+  // ---------- postavy: rig z dílů s klouby (design/rig-navrh) ----------
+  // ---------- postavy: rig z dílů s klouby ----------
+  // Marek (k): vytáhlý a hranatý – úzká protáhlá hlava s bradou, vysoký účes s vláskem, velký nos, dlouhé ruce.
+  // Radka (h): malá a kulatá – kulatá hlava, rovná ofina, dva culíky do stran, nosík, pihy, krátké ruce.
+  // Lokální souřadnice: počátek mezi chodidly, postava kouká doprava (+x), y dolů. Úhly končetin jsou absolutní: 0 = dolů, PI/2 = dopředu, PI = nahoru.
+  var RIG = {
+    k: { hip: 50, torso: 54, neck: [3, -54], head: [5, -44], ua: 29, la: 28, hand: 8.5, leg: 25, sleeve: 14, fore: 10.5, shTop: 19, shBot: 22,
+      skin: "#FFC9A6", skin2: "#F2A982", hair: "#2B2350", hair2: "#463B7A", top: "#4D6BFF", top2: "#3A52D6", trim: "#FFFFFF", pants: "#2B2350", shoe: "#FF5A4D" },
+    h: { hip: 46, torso: 48, neck: [3, -48], head: [6, -40], ua: 23, la: 22, hand: 8.5, leg: 22, sleeve: 15, fore: 11, shTop: 21, shBot: 33,
+      skin: "#FFC4A0", skin2: "#F0A580", hair: "#FF7A2E", hair2: "#E05A12", top: "#FF5C93", top2: "#E23C77", trim: "#FFD23F", pants: "#1D2145", shoe: "#FFD23F" }
+  };
+  var OL = 4.6, IL = 3.2;
+  // špička nosu v souřadnicích trupu (pro „dlouhý nos“)
+  function noseAt(sex) { var R = RIG[sex]; return sex === "k" ? [R.neck[0] + R.head[0] + 42, R.neck[1] + R.head[1] + 12] : [R.neck[0] + R.head[0] + 22, R.neck[1] + R.head[1] + 20]; } // obrysová a vnitřní linka
+  function dirv(a, l) { return [Math.sin(a) * l, Math.cos(a) * l]; }
+  function cap(c, x1, y1, x2, y2, w, col) { // končetina: tlustá úsečka s obrysem
+    c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); line(c, w + OL * 2, P.ink); c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); line(c, w, col);
+  }
+  function hand(c, R, x, y, ang, kind) {
+    c.save(); c.translate(x, y); c.rotate(-ang);
+    if (kind === "mitt") { // roztažené prsty, chytá
+      for (var i = -2; i <= 2; i++) { var a = i * 0.42; seg(c, 0, 0, Math.sin(a) * 15, Math.cos(a) * 15, 6.4 + OL * 2, P.ink); }
+      for (i = -2; i <= 2; i++) { a = i * 0.42; seg(c, 0, 0, Math.sin(a) * 15, Math.cos(a) * 15, 6.4, R.skin); }
+      circ(c, 0, 2, R.hand + 1.5); paint(c, R.skin, 0);
+    } else if (kind === "open") {
+      ell(c, 0, 4, R.hand, R.hand + 2.5); paint(c, R.skin, OL * 0.8);
+      c.beginPath(); c.moveTo(R.hand * 0.6, 0); c.quadraticCurveTo(R.hand + 6, 2, R.hand + 4, 9); line(c, 5.4 + OL * 1.6); c.beginPath(); c.moveTo(R.hand * 0.6, 0); c.quadraticCurveTo(R.hand + 6, 2, R.hand + 4, 9); line(c, 5.4, R.skin);
+    } else if (kind === "point") {
+      circ(c, 0, 2, R.hand); paint(c, R.skin, OL * 0.8); seg(c, 0, 6, 0, 18, 5.2 + OL * 1.6); seg(c, 0, 6, 0, 18, 5.2, R.skin);
+    } else { circ(c, 0, 2, R.hand); paint(c, R.skin, OL * 0.8); seg(c, -3, 4, 3, 5, 2.2); }
+    c.restore();
+  }
+  // dvoukloubová IK: ruka míří na bod (tx, ty), loket ohnutý ke straně bend (+1 dolů/dozadu, -1 nahoru)
+  function ik(sx, sy, tx, ty, l1, l2, bend) {
+    var dx = tx - sx, dy = ty - sy, d = Math.max(1, Math.min(Math.hypot(dx, dy), l1 + l2 - 0.01)), base = Math.atan2(dx, dy);
+    var A = Math.acos(Math.max(-1, Math.min(1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d)))), up = base + bend * A;
+    var ex = sx + Math.sin(up) * l1, ey = sy + Math.cos(up) * l1, X = sx + Math.sin(base) * d, Y = sy + Math.cos(base) * d;
+    return [up, Math.atan2(X - ex, Y - ey)];
+  }
+  function armDraw(c, R, sx, sy, a, kind, ha) {
+    var e = dirv(a[0], R.ua), ex = sx + e[0], ey = sy + e[1], w = dirv(a[1], R.la), wx = ex + w[0], wy = ey + w[1];
+    cap(c, ex, ey, wx, wy, R.fore, R.skin);
+    cap(c, sx, sy, ex + (wx - ex) * 0.12, ey + (wy - ey) * 0.12, R.sleeve, R.top);
+    hand(c, R, wx, wy, ha == null ? a[1] : ha, kind);
+    return [wx, wy, a[1]];
+  }
+  function legDraw(c, R, hx, hy, a, k) {
+    var e = dirv(a[0], R.leg), ex = hx + e[0], ey = hy + e[1], f = dirv(a[1], R.leg), fx = ex + f[0], fy = ey + f[1];
+    cap(c, hx, hy, ex, ey, 13, R.pants); cap(c, ex, ey, fx, fy, 11, R.pants);
+    c.save(); c.translate(fx, fy); c.rotate(-a[1]);
+    if (k) { c.beginPath(); c.moveTo(-8, -2); c.lineTo(-8, 6); c.quadraticCurveTo(-8, 10, -3, 10); c.lineTo(20, 10); c.quadraticCurveTo(24, 1, 13, -1); c.closePath(); }
+    else { ell(c, 4, 4, 12, 8); }
+    c.restore();
+    paint(c, R.shoe, OL);
+  }
+  // trup: lichoběžník (Marek tričko s pruhem) / zvon (Radka šaty s límečkem); lem vlaje podle sec.hem
+  function torsoDraw(c, R, K, hem) {
+    var T = R.torso, a = R.shTop, b = R.shBot, hf = hem * 6;
     c.beginPath();
-    for (var i = 0; i <= 28; i++) { var a = i / 28 * turns * TAU * (flip ? -1 : 1), rr = r * i / 28; var X = cx + Math.cos(a) * rr, Y = cy + Math.sin(a) * rr; if (i) c.lineTo(X, Y); else c.moveTo(X, Y); }
-    line(c, 3.4, P.ink);
+    if (K) { c.moveTo(-a, -T + 6); c.quadraticCurveTo(-a, -T, -a + 7, -T); c.lineTo(a - 7, -T); c.quadraticCurveTo(a + 1, -T, a + 2, -T + 8); c.lineTo(b + hf * 0.4, 4); c.lineTo(-b - hf, 4 + hf * 0.3); c.closePath(); }
+    else { c.moveTo(-a + 2, -T + 4); c.quadraticCurveTo(0, -T - 5, a - 2, -T + 4); c.quadraticCurveTo(b - 6, -T * 0.4, b + hf * 0.5, 6); c.quadraticCurveTo(0, 12, -b - hf, 6 + hf * 0.3); c.quadraticCurveTo(-b + 6, -T * 0.4, -a + 2, -T + 4); c.closePath(); }
+    paint(c, R.top, 0);
+    c.save(); c.clip();
+    if (K) { c.fillStyle = R.trim; c.fillRect(-40, -T * 0.52, 80, 8); c.fillStyle = R.top2; c.fillRect(-40, -T * 0.52 + 8, 80, 3); c.fillRect(-a - 4, -T, 9, T + 10); }
+    else { c.fillStyle = R.top2; c.fillRect(-b - 10, -T, 12, T + 16); }
+    c.restore();
+    line(c, OL);
+    if (K) { c.beginPath(); c.moveTo(-7, -T + 0.5); c.quadraticCurveTo(1, -T + 9, 9, -T + 0.5); line(c, IL); }
+    else { c.beginPath(); c.moveTo(-12, -T + 1); c.quadraticCurveTo(-6, -T + 10, 2, -T + 3); c.quadraticCurveTo(8, -T + 10, 14, -T + 1); paint(c, R.trim, IL); }
   }
-  function drop(c, x, y, s) { c.beginPath(); c.moveTo(x, y - 9 * s); c.quadraticCurveTo(x + 7 * s, y + 1 * s, x, y + 7 * s); c.quadraticCurveTo(x - 7 * s, y + 1 * s, x, y - 9 * s); c.closePath(); paint(c, P.sky2, 0); }
-  // f: { mood, lx, ly (pohled -1..1, x dopředu), blink 0..1 }
-  function face(c, sex, f) {
-    var m = f.mood, K = sex === "k", lx = f.lx || 0, ly = f.ly || 0, skin = SKIN[sex];
-    var ex = K ? 19 : 21, ey = K ? -9 : -9, er = K ? 14.5 : 15.5;
-    var wide = m === "scared" || m === "peek", shut = m === "ouch" || m === "yell" || m === "happy" || f.blink > 0.5, spin = m === "dizzy" || m === "ko";
-    var half = m === "smug" ? 0.42 : m === "focus" ? 0.34 : 0;
-    // oči
-    for (var s = -1; s <= 1; s += 2) {
-      var cx = s * ex, cy = ey;
-      if (spin) { circ(c, cx, cy, er + 1.5); paint(c, P.white, 3.6); spiral(c, cx, cy, er - 3, 2.4, s > 0); continue; }
-      if (m === "ouch" || m === "yell") { // > <
-        c.beginPath(); c.moveTo(cx - s * 11, cy - 11); c.lineTo(cx + s * 7, cy); c.lineTo(cx - s * 11, cy + 11); line(c, 5.6); continue;
-      }
-      if (m === "happy" || f.blink > 0.5) { c.beginPath(); c.moveTo(cx - 13, cy + 4); c.quadraticCurveTo(cx, cy - 14, cx + 13, cy + 4); line(c, 5.2); continue; }
-      var R = wide ? er + 3 : er;
-      circ(c, cx, cy, R); paint(c, P.white, 3.8);
-      var pr = wide ? 4.6 : m === "focus" ? 5.6 : 6.6, mx = wide ? 4 : 6.5;
-      circ(c, cx + lx * mx, cy + ly * mx, pr); fill(c, P.ink);
-      circ(c, cx + lx * mx + 1.8, cy + ly * mx - 2.2, 1.9); fill(c, P.white);
-      if (half) { // horní víčko
-        // jednoduše: výseč nad čarou y = cy - R * (1 - 2 * half)
-        var yy = cy - R * (1 - 2 * half), dx = Math.sqrt(Math.max(0, (R + 1.4) * (R + 1.4) - (yy - cy) * (yy - cy)));
-        var a0 = Math.atan2(yy - cy, -dx), a1 = Math.atan2(yy - cy, dx);
-        c.beginPath(); c.arc(cx, cy, R + 1.4, a0, a1 + (a1 < a0 ? TAU : 0)); c.closePath(); paint(c, skin, 3.8);
-      }
+
+  // ---------- obličej: oči, víčka, obočí, ústa ----------
+  // výrazy: idle, aim, tense, hit, weak, ko, joy, taunt, scared, smug, dizzy
+  var EXPR = {
+    idle:   { lid: 0.18, brow: 0, tilt: 0, mouth: "smile", eye: "o" },
+    aim:    { lid: 0.42, lid2: 0.75, brow: 2, tilt: 5, mouth: "tongue", eye: "o" },
+    tense:  { lid: 0.22, brow: 4, tilt: 9, mouth: "grit", eye: "o", pupil: 0.8 },
+    scared: { lid: 0, brow: 8, tilt: -9, mouth: "o", eye: "wide" },
+    hit:    { brow: 6, tilt: -9, mouth: "ouch", eye: "shut" },
+    weak:   { lid: 0.48, brow: -2, tilt: -8, mouth: "wavy", eye: "o", pupil: 0.7, sweat: 1 },
+    ko:     { brow: -4, tilt: -6, mouth: "ko", eye: "x" },
+    dizzy:  { brow: -4, tilt: -4, mouth: "wavy", eye: "spin" },
+    joy:    { brow: -6, tilt: -5, mouth: "grin", eye: "happy", blush: 1 },
+    taunt:  { lid: 0.5, brow: -3, tilt: -2, browUp: 1, mouth: "raspberry", eye: "o", blush: 0.6 },
+    smug:   { lid: 0.5, brow: -2, tilt: 2, browUp: 1, mouth: "smirk", eye: "o" },
+    throw:  { lid: 0.25, brow: 5, tilt: 10, mouth: "ouch", eye: "o", pupil: 0.85 }
+  };
+  function eyeAt(c, R, K, x, y, rx, ry, E, f, side) {
+    var kind = E.eye, lx = f.lx || 0, ly = f.ly || 0;
+    if (kind === "shut") { var q = -side; c.beginPath(); c.moveTo(x - q * rx * 0.9, y - ry * 0.6); c.lineTo(x + q * rx * 0.6, y); c.lineTo(x - q * rx * 0.9, y + ry * 0.6); line(c, 4.4); return; }
+    if (kind === "happy" || (f.blink > 0.55 && kind !== "x" && kind !== "spin")) { c.beginPath(); c.moveTo(x - rx, y + 2); c.quadraticCurveTo(x, y - ry * (kind === "happy" ? 1.3 : 0.1), x + rx, y + 2); line(c, 4.2); return; }
+    if (kind === "x") { seg(c, x - rx * 1.05, y - rx * 1.05, x + rx * 1.05, y + rx * 1.05, 5.2); seg(c, x + rx * 1.05, y - rx * 1.05, x - rx * 1.05, y + rx * 1.05, 5.2); return; }
+    var wide = kind === "wide", RX = wide ? rx * 1.18 : rx, RY = wide ? ry * 1.18 : ry;
+    ell(c, x, y, RX, RY); paint(c, P.white, 0);
+    if (kind === "spin") { c.save(); ell(c, x, y, RX, RY); c.clip(); c.beginPath(); for (var i = 0; i <= 24; i++) { var a = i / 24 * 2.2 * TAU * side + (f.t || 0) * 8, rr = RX * 0.85 * i / 24; c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * RY / RX); } line(c, 2.6); c.restore(); ell(c, x, y, RX, RY); line(c, IL); return; }
+    var pr = (K ? 4.2 : 4.8) * (wide ? 0.62 : E.pupil || 1), mx = RX - pr - 1.6, my = RY - pr - 1.6;
+    var px = x + lx * mx, py = y + ly * my;
+    c.save(); ell(c, x, y, RX, RY); c.clip();
+    circ(c, px, py, pr); fill(c, P.ink); circ(c, px + pr * 0.35, py - pr * 0.4, pr * 0.32); fill(c, P.white);
+    // horní víčko: kůže nad šikmou čarou, mrknutí ho stáhne dolů
+    var lid = Math.max(E.lid || 0, f.blink || 0); if (side > 0 && E.lid2) lid = Math.max(lid, E.lid2 * (f.blink > 0.55 ? 1 : 1));
+    if (lid > 0.02) {
+      var ly0 = y - RY + lid * RY * 2, tl = (E.tilt || 0) * 0.5 * (E.mouth === "raspberry" || E.browUp ? -0.6 : 1);
+      c.beginPath(); c.moveTo(x - RX - 2, ly0 - tl * side * -1 - tl); c.lineTo(x + RX + 2, ly0 + tl * side * -1 - tl); c.lineTo(x + RX + 2, y - RY - 4); c.lineTo(x - RX - 2, y - RY - 4); c.closePath(); fill(c, R.skin);
+      c.beginPath(); c.moveTo(x - RX - 2, ly0 - tl * side * -1 - tl); c.lineTo(x + RX + 2, ly0 + tl * side * -1 - tl); line(c, IL);
     }
-    // brýle holky
-    if (!K && !spin) { for (var q = -1; q <= 1; q += 2) { circ(c, q * ex, ey, er + 5.5); line(c, 3.6, P.ink); } seg(c, -ex + er + 5, ey, ex - er - 5, ey, 3.4); }
-    // obočí
-    var by = ey - er - (K ? 11 : 15), up = wide ? -9 : m === "smug" ? -3 : 0, tilt = m === "focus" || m === "yell" ? 8 : m === "ouch" ? -7 : m === "happy" ? -4 : wide ? -4 : 4;
+    c.restore();
+    ell(c, x, y, RX, RY); line(c, IL);
+  }
+  function brow(c, K, x, y, w, E, side) {
+    var up = (E.brow || 0) * -1, tilt = (E.tilt || 0) * side, extra = E.browUp && side > 0 ? -7 : 0;
+    // tilt > 0: vnitřní konec dolů (zamračení); side -1 = zadní oko (vlevo), vnitřní konec je vpravo
+    var xi = x + w * (side < 0 ? 1 : -1) * 0.5, xo = x - w * (side < 0 ? 1 : -1) * 0.5;
+    c.beginPath(); c.moveTo(xo, y + up + extra - tilt * 0.5 * side * side); c.quadraticCurveTo(x, y + up + extra - (K ? 4 : 5), xi, y + up + extra + tilt * 0.6 * side * side);
+    line(c, K ? 6.4 : 4.4);
+  }
+  function mouth(c, R, K, x, y, E, f) {
+    var m = E.mouth, w = K ? 15 : 12;
+    if (m === "smile") { c.beginPath(); c.moveTo(x - w, y - 3); c.quadraticCurveTo(x + 1, y + 9, x + w + 2, y - 5); line(c, IL + 0.6); seg(c, x + w + 2, y - 5, x + w + 5, y - 8, IL); }
+    else if (m === "smirk") { c.beginPath(); c.moveTo(x - w + 4, y + 1); c.quadraticCurveTo(x + 4, y + 5, x + w + 4, y - 7); line(c, IL + 0.6); }
+    else if (m === "tongue") { c.beginPath(); c.moveTo(x - w + 2, y); c.lineTo(x + w, y - 2); line(c, IL + 0.6); c.beginPath(); c.moveTo(x + w - 9, y - 1); c.quadraticCurveTo(x + w - 7, y + 11, x + w - 1, y + 9); c.quadraticCurveTo(x + w + 4, y + 7, x + w, y - 2); c.closePath(); paint(c, P.tongue, IL); }
+    else if (m === "grit") { rrect(c, x - w, y - 7, w * 2, 14, 5); paint(c, P.white, IL); seg(c, x - w, y, x + w, y, 2.4); for (var i = -1; i <= 1; i++) seg(c, x + i * w * 0.5, y - 7, x + i * w * 0.5, y + 7, 2.2); }
+    else if (m === "o") { ell(c, x + 2, y + 2, 6.5, 9); paint(c, P.mouth, IL); }
+    else if (m === "ouch") {
+      c.beginPath(); c.moveTo(x - w - 2, y - 6); c.lineTo(x + w + 2, y - 8); c.quadraticCurveTo(x + w, y + 14, x, y + 13); c.quadraticCurveTo(x - w, y + 14, x - w - 2, y - 6); c.closePath(); paint(c, P.mouth, 0);
+      c.save(); c.clip(); c.fillStyle = P.white; c.fillRect(x - w - 4, y - 10, w * 2 + 8, 7); ell(c, x + 2, y + 13, 8, 5); fill(c, P.tongue); c.restore();
+      c.beginPath(); c.moveTo(x - w - 2, y - 6); c.lineTo(x + w + 2, y - 8); c.quadraticCurveTo(x + w, y + 14, x, y + 13); c.quadraticCurveTo(x - w, y + 14, x - w - 2, y - 6); c.closePath(); line(c, IL);
+    }
+    else if (m === "grin") {
+      c.beginPath(); c.moveTo(x - w - 3, y - 6); c.quadraticCurveTo(x + 1, y - 1, x + w + 5, y - 9); c.quadraticCurveTo(x + w, y + 16, x + 1, y + 16); c.quadraticCurveTo(x - w - 2, y + 15, x - w - 3, y - 6); c.closePath(); paint(c, P.mouth, 0);
+      c.save(); c.clip();
+      if (K) { c.fillStyle = P.white; c.fillRect(x - 8, y - 12, 8, 13); c.fillRect(x + 3, y - 12, 8, 13); } else { c.fillStyle = P.white; c.fillRect(x - w - 4, y - 12, w * 2 + 10, 7); }
+      ell(c, x + 2, y + 15, 9, 6); fill(c, P.tongue); c.restore();
+      c.beginPath(); c.moveTo(x - w - 3, y - 6); c.quadraticCurveTo(x + 1, y - 1, x + w + 5, y - 9); c.quadraticCurveTo(x + w, y + 16, x + 1, y + 16); c.quadraticCurveTo(x - w - 2, y + 15, x - w - 3, y - 6); c.closePath(); line(c, IL);
+    }
+    else if (m === "wavy") { c.beginPath(); c.moveTo(x - w, y + 2); for (var q = 1; q <= 4; q++) c.quadraticCurveTo(x - w + (q - 0.5) * w / 2, y + (q % 2 ? -5 : 7), x - w + q * w / 2, y + 2); line(c, IL + 0.4); }
+    else if (m === "ko") { ell(c, x + 1, y + 1, 9, 6); paint(c, P.mouth, IL); c.beginPath(); c.moveTo(x - 2, y + 3); c.lineTo(x - 2, y + 15); c.quadraticCurveTo(x + 4, y + 22, x + 9, y + 15); c.lineTo(x + 9, y + 3); c.closePath(); paint(c, P.tongue, IL); seg(c, x + 3.5, y + 6, x + 3.5, y + 13, 1.8); }
+    else if (m === "raspberry") { c.beginPath(); c.moveTo(x - 6, y - 3); c.quadraticCurveTo(x + 4, y - 7, x + 12, y - 2); c.quadraticCurveTo(x + 4, y + 4, x - 6, y - 3); c.closePath(); paint(c, P.mouth, IL); c.beginPath(); c.moveTo(x + 2, y - 2); c.quadraticCurveTo(x + 6, y + 15, x + 13, y + 12); c.quadraticCurveTo(x + 17, y + 4, x + 12, y - 2); c.closePath(); paint(c, P.tongue, IL); }
+  }
+  function sweatDrop(c, x, y, s) { c.beginPath(); c.moveTo(x, y - 8 * s); c.quadraticCurveTo(x + 6 * s, y + 1 * s, x, y + 6 * s); c.quadraticCurveTo(x - 6 * s, y + 1 * s, x, y - 8 * s); c.closePath(); paint(c, "#7FD3FF", IL * 0.8); }
+  // hlava: střed v 0,0; sec.h1 / sec.h2 = výchylky vlasů (pružiny), f = {ex, lx, ly, blink, t, sweat}
+  function head2(c, sex, f, sec) {
+    var K = sex === "k", R = RIG[sex], E = EXPR[f.ex] || EXPR.idle, h1 = (sec && sec.h1) || 0, h2 = (sec && sec.h2) || 0;
     if (K) {
-      c.beginPath(); c.moveTo(-ex - 12, by + up + tilt * 0.9 - (m === "smug" ? 0 : 0)); c.quadraticCurveTo(0, by + up - 5 - tilt * 0.2, ex + 12, by + up - tilt * 0.9 + (m === "smug" ? -7 : 0)); line(c, 8.4);
+      // vlásek na temeni (pružina)
+      c.save(); c.translate(-14, -66); c.rotate(-0.5 + h1);
+      c.beginPath(); c.moveTo(-3, 4); c.quadraticCurveTo(-6, -14, 6, -24); c.quadraticCurveTo(0, -12, 5, 4); c.closePath(); paint(c, R.hair, IL); c.restore();
+      // ucho vzadu
+      ell(c, -30, 2, 9, 13); paint(c, R.skin, OL); c.beginPath(); c.arc(-30, 2, 5, -1.2, 1.4); line(c, IL);
+      // hlava: protáhlá, dole širší brada
+      c.beginPath(); c.moveTo(-26, -40); c.quadraticCurveTo(-30, 0, -24, 30); c.quadraticCurveTo(-14, 52, 10, 50); c.quadraticCurveTo(34, 48, 34, 22); c.quadraticCurveTo(36, -10, 30, -40); c.quadraticCurveTo(2, -56, -26, -40); c.closePath();
+      paint(c, R.skin, OL);
+      c.save(); c.clip(); c.fillStyle = R.skin2; c.fillRect(-40, -46, 90, 18); c.restore();
+      // účes: vysoký plochý kvádr nakloněný dopředu s vlnou vpředu
+      c.beginPath(); c.moveTo(-30, -14); c.lineTo(-31, -46); c.quadraticCurveTo(-30, -70, -6, -72); c.lineTo(30, -74); c.quadraticCurveTo(46, -72, 42, -56); c.quadraticCurveTo(36, -44, 22, -46); c.quadraticCurveTo(14, -36, 2, -42); c.quadraticCurveTo(-10, -36, -18, -38); c.quadraticCurveTo(-24, -28, -22, -14); c.closePath();
+      paint(c, R.hair, OL);
+      c.beginPath(); c.moveTo(-14, -64); c.quadraticCurveTo(6, -66, 28, -64); line(c, IL, R.hair2);
     } else {
-      for (var z = -1; z <= 1; z += 2) { c.beginPath(); c.moveTo(z * (ex + 11), by + up - tilt * 0.6 + (z > 0 && m === "smug" ? -8 : 0)); c.quadraticCurveTo(z * ex, by + up - 6, z * (ex - 12), by + up + tilt * 0.9); line(c, 5.6); }
+      // culíky nahoře do stran (pružiny), zadní se kreslí za hlavou
+      for (var sdx = -1; sdx <= 1; sdx += 2) {
+        c.save(); c.translate(sdx * 42 + 2, -14); c.rotate(sdx * 1.2 + (sdx < 0 ? h1 : h2));
+        c.beginPath(); c.moveTo(-9, 2); c.quadraticCurveTo(sdx * 6, -34, sdx * 26, -26); c.quadraticCurveTo(sdx * 38, -4, sdx * 12, 8); c.closePath(); paint(c, R.hair, OL);
+        c.beginPath(); c.moveTo(sdx * 8, -12); c.quadraticCurveTo(sdx * 20, -20, sdx * 26, -12); line(c, IL, R.hair2);
+        rrect(c, -8, -7, 16, 12, 5); paint(c, R.trim, IL);
+        c.restore();
+      }
+      // mikádo: vlasy vzadu sahají k bradě
+      c.beginPath(); c.moveTo(-48, 22); c.quadraticCurveTo(-54, -50, 2, -52); c.quadraticCurveTo(56, -50, 50, 18); c.quadraticCurveTo(44, 30, 34, 26); c.lineTo(-38, 30); c.quadraticCurveTo(-48, 32, -48, 22); c.closePath(); paint(c, R.hair, OL);
+      // obličej
+      ell(c, 4, 10, 40, 36); paint(c, R.skin, OL);
+      // stín pod ofinou
+      c.save(); ell(c, 4, 10, 38, 34); c.clip(); c.fillStyle = R.skin2; c.fillRect(-40, -30, 90, 26); c.restore();
+      // ofina: rovný střih se třemi zoubky
+      var BG = function () { c.moveTo(47, 2); c.quadraticCurveTo(42, -8, 36, -16); c.lineTo(30, -26); c.lineTo(22, -14); c.lineTo(12, -28); c.lineTo(2, -14); c.lineTo(-8, -28); c.lineTo(-18, -14); c.lineTo(-28, -26); c.quadraticCurveTo(-38, -14, -43, 4); };
+      c.beginPath(); c.moveTo(-43, 4); c.quadraticCurveTo(-48, -44, 2, -46); c.quadraticCurveTo(50, -44, 47, 2); c.quadraticCurveTo(42, -8, 36, -16); c.lineTo(30, -26); c.lineTo(22, -14); c.lineTo(12, -28); c.lineTo(2, -14); c.lineTo(-8, -28); c.lineTo(-18, -14); c.lineTo(-28, -26); c.quadraticCurveTo(-38, -14, -43, 4); c.closePath(); fill(c, R.hair);
+      c.beginPath(); BG(); line(c, OL);
+      c.beginPath(); c.moveTo(-26, -34); c.quadraticCurveTo(4, -42, 30, -32); line(c, IL, R.hair2);
     }
-    // nos
-    if (K) { ell(c, 4, 15, 17, 14); paint(c, "#FFB48C", 4); ell(c, 0, 10, 5, 3.4, -0.4); fill(c, "#FFE0CD"); } else { circ(c, 4, 14, 7.5); paint(c, "#EE9677", 3.6); }
-    // ústa
-    var my = K ? 38 : 37;
-    if (m === "yell") { ell(c, 0, my + 1, 19, 17); paint(c, P.mouth, 4.4); ell(c, 0, my + 11, 11, 7); fill(c, P.tongue); }
-    else if (m === "ouch") { c.beginPath(); c.moveTo(-17, my - 3); c.quadraticCurveTo(-9, my + 17, 0, my + 3); c.quadraticCurveTo(9, my + 17, 17, my - 3); c.quadraticCurveTo(0, my + 24, -17, my - 3); c.closePath(); paint(c, P.mouth, 4.4); c.beginPath(); c.moveTo(-9, my + 1); c.lineTo(9, my + 1); line(c, 4, P.white); }
-    else if (m === "happy") { c.beginPath(); c.moveTo(-21, my - 6); c.quadraticCurveTo(0, my + 2, 21, my - 6); c.quadraticCurveTo(14, my + 26, 0, my + 24); c.quadraticCurveTo(-14, my + 26, -21, my - 6); c.closePath(); paint(c, P.mouth, 4.4); ell(c, 0, my + 17, 9, 5.5); fill(c, P.tongue); }
-    else if (m === "scared" || m === "peek") { ell(c, 0, my + 3, 8.5, 11.5); paint(c, P.mouth, 4.2); }
-    else if (spin) { c.beginPath(); c.moveTo(-16, my); c.quadraticCurveTo(-8, my - 9, 0, my); c.quadraticCurveTo(8, my + 9, 16, my); line(c, 4.6); ell(c, 8, my + 11, 6, 8); paint(c, P.tongue, 3.4); }
-    else if (m === "focus") { c.beginPath(); c.moveTo(-14, my); c.lineTo(15, my - 1); line(c, 4.8); c.beginPath(); c.moveTo(7, my - 1); c.lineTo(7, my + 9); c.quadraticCurveTo(7, my + 17, 14, my + 17); c.quadraticCurveTo(21, my + 17, 21, my + 9); c.lineTo(21, my - 1); c.closePath(); paint(c, P.tongue, 3.6); }
-    else if (m === "smug") { c.beginPath(); c.moveTo(-15, my + 2); c.quadraticCurveTo(2, my + 6, 20, my - 8); line(c, 5); c.beginPath(); c.moveTo(20, my - 8); c.lineTo(23, my - 13); line(c, 4); }
-    else { // klid: šibalský úsměv
-      c.beginPath(); c.moveTo(-16, my - 1); c.quadraticCurveTo(0, my + 11, 17, my - 4); line(c, 5); c.beginPath(); c.moveTo(17, my - 4); c.lineTo(20, my - 9); line(c, 4);
+    // oči, obočí, nos, ústa
+    var ex1 = K ? -4 : -11, ex2 = K ? 17 : 17, ey = K ? -10 : 8, rx = K ? 8 : 10.5, ry = K ? 12 : 11;
+    if (f.cream) { creamFace(c, K); }
+    else {
+      eyeAt(c, R, K, ex1, ey, rx * 0.92, ry * 0.95, E, f, -1); eyeAt(c, R, K, ex2, ey, rx, ry, E, f, 1);
+      var by = K ? ey - ry - 7 : -8; // Radka: obočí kreslené přes ofinu
+      brow(c, K, ex1 - 1, by, K ? 17 : 15, E, -1); brow(c, K, ex2 + 1, by, K ? 18 : 16, E, 1);
     }
-    // tváře a pot
-    if (m === "ouch" || m === "happy" || (m === "smug" && !K)) { c.globalAlpha = 0.9; circ(c, -ex - 11, 22, 8); fill(c, "#FF8F8F"); circ(c, ex + 13, 22, 8); fill(c, "#FF8F8F"); c.globalAlpha = 1; }
-    if (m === "scared" || m === "peek") { drop(c, -ex - 20, -34, 1.1); drop(c, ex + 22, -26, 0.9); }
-    if (m === "ouch") { drop(c, -ex - 24, -30, 1.2); drop(c, ex + 26, -38, 1.0); }
-  }
-  // koláč na očích (dort)
-  function cream(c) {
-    c.beginPath(); c.moveTo(-50, -34); c.quadraticCurveTo(-52, -10, -40, 2); c.quadraticCurveTo(-36, 26, -24, 8); c.quadraticCurveTo(-14, 28, -4, 6);
-    c.quadraticCurveTo(6, 30, 18, 6); c.quadraticCurveTo(30, 22, 38, 2); c.quadraticCurveTo(54, -10, 50, -34); c.quadraticCurveTo(0, -52, -50, -34); c.closePath(); paint(c, P.cream, 4);
-    circ(c, 8, -40, 8); paint(c, P.red, 3.6);
-  }
-  // hlava sama: hlava + vlasy + obličej (střed hlavy v 0,0)
-  function head(c, sex, f) {
-    var K = sex === "k", skin = SKIN[sex];
-    if (K) {
-      // uši
-      circ(c, -51, 4, 13); paint(c, skin, 4); circ(c, 51, 4, 13); paint(c, skin, 4);
-      ell(c, 0, 0, 50, 58); paint(c, skin, 4.4);
-      // tři pačesy
-      c.beginPath(); c.moveTo(-22, -52); c.lineTo(-30, -84); c.lineTo(-8, -57); c.lineTo(-4, -92); c.lineTo(12, -56); c.lineTo(28, -80); c.lineTo(30, -46); c.quadraticCurveTo(0, -62, -22, -52); c.closePath(); paint(c, HAIR.k, 4);
+    if (K) { // velký nos, přesahuje obrys
+      c.beginPath(); c.moveTo(18, 4); c.quadraticCurveTo(46, 0, 44, 16); c.quadraticCurveTo(40, 26, 22, 20); c.closePath(); paint(c, R.skin, OL); c.beginPath(); c.arc(36, 15, 4, 0.2, 2.4); line(c, IL);
     } else {
-      circ(c, -4, -16, 68); paint(c, HAIR.h, 4.4);      // obří vlasy
-      circ(c, -6, -82, 26); paint(c, HAIR.h, 4.4);       // drdol
-      ell(c, 0, 4, 55, 52); paint(c, skin, 4.4);
-      c.beginPath(); c.moveTo(-54, -14); c.quadraticCurveTo(-34, -50, 6, -50); c.quadraticCurveTo(44, -50, 55, -14); c.quadraticCurveTo(34, -30, 10, -24); c.quadraticCurveTo(-20, -26, -54, -14); c.closePath(); paint(c, HAIR.h, 4);
+      c.beginPath(); c.moveTo(19, 22); c.quadraticCurveTo(27, 26, 21, 31); line(c, IL);
+      for (var fr = 0; fr < 3; fr++) { circ(c, -18 + fr * 5, 20 + (fr % 2) * 3, 1.6); fill(c, "#D9826A"); circ(c, 30 + fr * 4, 20 + (fr % 2) * 3, 1.6); fill(c, "#D9826A"); }
     }
-    c.save(); if (!K) c.translate(0, 6); face(c, sex, f); if (f.cream) cream(c); c.restore();
-    if (f.hat) hat(c, K, f.hat);
+    if (E.blush) { c.globalAlpha = 0.55 * E.blush; ell(c, K ? -12 : -20, K ? 16 : 26, 8, 5); fill(c, "#FF7C8A"); ell(c, K ? 26 : 34, K ? 26 : 26, 7, 4.5); fill(c, "#FF7C8A"); c.globalAlpha = 1; }
+    mouth(c, R, K, K ? 12 : 9, K ? 32 : 34, E, f);
+    var sw = Math.max(E.sweat || 0, f.sweat || 0);
+    if (sw > 0) { var tt = ((f.t || 0) * 0.9) % 1; sweatDrop(c, K ? -24 : -38, (K ? -30 : -24) + tt * 22, 1.05); if (sw > 0.6) sweatDrop(c, K ? 30 : 42, (K ? -34 : -30) + ((tt + 0.5) % 1) * 18, 0.85); }
+    if (f.hat) hat2(c, K, f.hat);
   }
-  // postup v sérii: 1 čelenka, 2 párty čepice, 3 koruna
-  function hat(c, K, h) {
-    var y = K ? -56 : -88, a = K ? -26 : -34, b = K ? -12 : -20, m = K ? -48 : -56, m2 = K ? -34 : -42;
-    if (h === 1) {
-      c.beginPath(); c.moveTo(-50, a); c.quadraticCurveTo(0, m, 50, a); c.lineTo(50, b); c.quadraticCurveTo(0, m2, -50, b); c.closePath(); paint(c, P.red, 4);
-      circ(c, 50, (a + b) / 2, 9); paint(c, P.red, 4);
-    } else if (h === 2) {
-      c.beginPath(); c.moveTo(-26, y + 4); c.lineTo(2, y - 74); c.lineTo(30, y + 4); c.closePath(); paint(c, P.sky2, 4);
-      c.beginPath(); c.moveTo(-15, y - 26); c.lineTo(17, y - 26); line(c, 7, P.yellow); circ(c, 2, y - 78, 10); paint(c, P.pink, 4);
-    } else if (h >= 3) {
-      c.beginPath(); c.moveTo(-34, y + 6); c.lineTo(-38, y - 44); c.lineTo(-18, y - 22); c.lineTo(0, y - 54); c.lineTo(18, y - 22); c.lineTo(38, y - 44); c.lineTo(34, y + 6); c.closePath(); paint(c, P.yellow, 4);
-      circ(c, 0, y - 12, 6); paint(c, P.red, 3);
+  function creamFace(c, K) {
+    var y0 = K ? -18 : -8;
+    c.beginPath(); c.moveTo(-26, y0 - 12); c.quadraticCurveTo(-30, y0 + 6, -20, y0 + 10); c.quadraticCurveTo(-16, y0 + 26, -8, y0 + 12); c.quadraticCurveTo(0, y0 + 28, 8, y0 + 12);
+    c.quadraticCurveTo(16, y0 + 24, 24, y0 + 10); c.quadraticCurveTo(38, y0 + 4, 34, y0 - 12); c.quadraticCurveTo(4, y0 - 24, -26, y0 - 12); c.closePath(); paint(c, P.cream, OL);
+    circ(c, 6, y0 - 16, 6.5); paint(c, P.red, IL);
+  }
+  function hat2(c, K, h) {
+    c.save(); c.translate(K ? 6 : 2, K ? -72 : -46);
+    if (h === 1) { c.beginPath(); c.moveTo(-34, 6); c.quadraticCurveTo(4, -6, 40, 6); c.lineTo(40, 15); c.quadraticCurveTo(4, 3, -34, 15); c.closePath(); paint(c, P.red, OL); }
+    else if (h === 2) { c.beginPath(); c.moveTo(-18, 4); c.lineTo(4, -50); c.lineTo(24, 4); c.closePath(); paint(c, "#4DB5FF", OL); seg(c, -8, -18, 15, -18, 6, P.yellow); circ(c, 4, -54, 8); paint(c, P.pink, IL); }
+    else if (h >= 3) { c.beginPath(); c.moveTo(-24, 6); c.lineTo(-27, -28); c.lineTo(-12, -14); c.lineTo(2, -36); c.lineTo(16, -14); c.lineTo(31, -28); c.lineTo(28, 6); c.closePath(); paint(c, P.yellow, OL); circ(c, 2, -6, 4.5); paint(c, P.red, IL); }
+    c.restore();
+  }
+  // celá postava. o: x, y, dir, k (měřítko), bx, by (posun těla), sx, sy (squash u nohou), lean (náklon trupu, + dopředu), hr (natočení hlavy),
+  // a1, a2 ([rameno, předloktí] přední a zadní ruka), h1, h2 (tvar dlaně), l1, l2 (nohy), legs (kreslit nohy), ex (výraz), lx, ly, blink,
+  // sec {h1, h2, hem}, hat, cream, hold(c, x, y, ang), t, sweat, shiver
+  function char(c, sex, o) {
+    var K = sex === "k", R = RIG[sex], sec = o.sec || {};
+    var sx = o.sx || 1, sy = o.sy || 1, sh = o.shiver ? Math.sin((o.t || 0) * 70) * o.shiver : 0;
+    c.save(); if (o.rot) { c.translate(o.px, o.py); c.rotate(o.rot); c.translate(-o.px, -o.py); }
+    c.translate(o.x, o.y); c.scale(o.dir * (o.k || 1), o.k || 1);
+    c.translate((o.bx || 0) + sh, o.by || 0); c.scale(sx, sy);
+    var hipY = -R.hip;
+    if (o.legs) { legDraw(c, R, -6, hipY + 4, o.l2 || [0.05, 0.05], K); }
+    c.save(); c.translate(0, hipY); c.rotate(o.lean || 0);
+    var s2 = [-5, -R.torso + 9], s1 = [6, -R.torso + 9];
+    var a2 = o.t2 ? ik(s2[0], s2[1], o.t2[0], o.t2[1], R.ua, R.la, o.t2[2] || 1) : o.a2 || [-0.35, -0.1];
+    var a1 = o.t1 ? ik(s1[0], s1[1], o.t1[0], o.t1[1], R.ua, R.la, o.t1[2] || 1) : o.a1 || [0.45, 1.2];
+    armDraw(c, R, s2[0], s2[1], a2, o.h2 || "fist", o.h2a);
+    if (o.legs) { c.restore(); legDraw(c, R, 6, hipY + 4, o.l1 || [-0.05, -0.05], K); c.save(); c.translate(0, hipY); c.rotate(o.lean || 0); }
+    torsoDraw(c, R, K, sec.hem || 0);
+    c.save(); c.translate(R.neck[0], R.neck[1]); c.rotate(o.hr || 0);
+    cap(c, 0, 4, 2, -10, K ? 11 : 12, R.skin); // krk
+    c.translate(R.head[0], R.head[1]);
+    head2(c, sex, { ex: o.ex, lx: o.lx, ly: o.ly, blink: o.blink, t: o.t, sweat: o.sweat, cream: o.cream, hat: o.hat }, sec);
+    c.restore();
+    var hp = armDraw(c, R, s1[0], s1[1], a1, o.h1 || "fist", o.h1a);
+    if (o.hold) o.hold(c, hp[0], hp[1], hp[2]);
+    c.restore();
+    c.restore();
+  }
+  // střed hlavy postavy ve světě (pro pružiny vlasů, efekty a kameru)
+  function headPos(sex, o) {
+    var R = RIG[sex], k = o.k || 1, sx = o.sx || 1, sy = o.sy || 1, la = o.lean || 0, hr = o.hr || 0;
+    var rot = function (x, y, a) { return [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a)]; };
+    var n = rot(R.neck[0], R.neck[1], la), h = rot(R.head[0], R.head[1], la + hr);
+    var lx = (o.bx || 0) + (n[0] + h[0]) * sx, ly = (o.by || 0) + (-R.hip + n[1] + h[1]) * sy;
+    return [o.x + o.dir * k * lx, o.y + k * ly];
+  }
+
+  // ---------- efekty ----------
+  // ---------- efekty: ploché tvary, linka jen tam, kde by bílá zanikla na nebi ----------
+  // pírko: zahnutý list s brkem; s = délka, rot = natočení, flip = zrcadlo
+  function feather(c, x, y, s, rot, col) {
+    c.save(); c.translate(x, y); c.rotate(rot);
+    c.beginPath(); c.moveTo(-s * 0.46, 0); c.bezierCurveTo(-s * 0.3, -s * 0.5, s * 0.1, -s * 0.62, s * 0.5, -s * 0.2); c.lineTo(s * 0.4, -s * 0.08); c.lineTo(s * 0.5, s * 0.02); c.lineTo(s * 0.34, s * 0.08); c.bezierCurveTo(s * 0.1, s * 0.4, -s * 0.2, s * 0.34, -s * 0.46, 0); c.closePath();
+    paint(c, col || P.white, Math.max(2, s * 0.08));
+    c.beginPath(); c.moveTo(-s * 0.74, s * 0.1); c.quadraticCurveTo(-s * 0.1, -s * 0.04, s * 0.46, -s * 0.12); line(c, Math.max(1.8, s * 0.07));
+    c.beginPath(); c.moveTo(-s * 0.18, -s * 0.02); c.lineTo(-s * 0.02, -s * 0.22); c.moveTo(s * 0.08, -s * 0.08); c.lineTo(s * 0.18, -s * 0.28); line(c, Math.max(1.2, s * 0.04), "#C9C3E8");
+    c.restore();
+  }
+  // obláček „puf“: shluk kruhů jednou obrysovou linkou (nejdřív obrys všech, pak výplň), u = 0..1 průběh
+  function poof(c, x, y, r, u, col, seed) {
+    var n = 6, grow = 0.55 + 0.6 * (1 - Math.pow(1 - Math.min(1, u * 1.6), 3)), fade = u < 0.55 ? 1 : 1 - (u - 0.55) / 0.45, rr = r * grow;
+    if (fade <= 0) return;
+    var pts = [];
+    for (var i = 0; i < n; i++) { var a = i / n * TAU + (seed || 0), d = rr * (0.62 + 0.18 * hash(i, seed | 0)); pts.push([x + Math.cos(a) * d, y + Math.sin(a) * d * 0.8, rr * (0.5 + 0.18 * hash(i + 7, seed | 0)) * fade]); }
+    pts.push([x, y, rr * 0.7 * fade]);
+    c.fillStyle = P.ink; for (var j = 0; j < pts.length; j++) { circ(c, pts[j][0], pts[j][1], pts[j][2] + 3.6); c.fill(); }
+    c.fillStyle = col || P.white; for (j = 0; j < pts.length; j++) { circ(c, pts[j][0], pts[j][1], pts[j][2]); c.fill(); }
+  }
+  // náraz: 5 krátkých čárek kolem místa dopadu (jen v obloučku od směru letu), u 0..1 – čárky se oddalují a zkracují
+  function impact(c, x, y, r, u, rot) {
+    var k = u < 0.2 ? 1 : 1 - (u - 0.2) / 0.8; if (k <= 0) return;
+    c.save(); c.translate(x, y); c.rotate(rot || 0);
+    for (var i = -2; i <= 2; i++) {
+      var a = Math.PI + i * 0.5, r0 = r * (0.62 + 0.5 * (1 - k)), r1 = r0 + r * 0.42 * k * (i % 2 ? 0.8 : 1);
+      var x0 = Math.cos(a) * r0, y0 = Math.sin(a) * r0, x1 = Math.cos(a) * r1, y1 = Math.sin(a) * r1;
+      seg(c, x0, y0, x1, y1, 11 * k + 3, P.ink); seg(c, x0, y0, x1, y1, 6.4 * k + 0.6, P.yellow);
+    }
+    c.restore();
+  }
+  // stopa letu: zužující se pruh za předmětem (pts od nejstaršího po nejnovější)
+  function trail(c, pts, w, col, alpha) {
+    if (pts.length < 3) return;
+    var L = [], R = [];
+    for (var i = 0; i < pts.length; i++) {
+      var p = pts[i], q = pts[Math.min(pts.length - 1, i + 1)], o = pts[Math.max(0, i - 1)], dx = q[0] - o[0], dy = q[1] - o[1], d = Math.hypot(dx, dy) || 1, k = Math.pow(i / (pts.length - 1), 1.4) * w;
+      L.push([p[0] - dy / d * k, p[1] + dx / d * k]); R.push([p[0] + dy / d * k, p[1] - dx / d * k]);
+    }
+    c.beginPath(); c.moveTo(L[0][0], L[0][1]);
+    for (i = 1; i < L.length; i++) c.lineTo(L[i][0], L[i][1]);
+    for (i = R.length - 1; i >= 0; i--) c.lineTo(R[i][0], R[i][1]);
+    c.closePath(); c.globalAlpha = alpha == null ? 0.55 : alpha; fill(c, col || P.white); c.globalAlpha = 1;
+  }
+  // prach při dopadu: dva obláčky kloužou po zemi do stran a mizí
+  function dust(c, x, y, s, u, col) {
+    var e = 1 - Math.pow(1 - Math.min(1, u), 2.4), k = Math.max(0, 1 - u);
+    c.fillStyle = col || "rgba(255,255,255,.85)";
+    for (var sdx = -1; sdx <= 1; sdx += 2) for (var i = 0; i < 3; i++) {
+      var px = x + sdx * (10 + e * (34 + i * 16)) * s, py = y - (6 + i * 5 * (1 - e)) * s, r = (11 - i * 2.4) * s * (0.5 + 0.5 * k) + 2;
+      circ(c, px, py, r * k + 0.01); c.fill();
     }
   }
 
-  // ---------- postava ----------
-  function arm(c, sx, sy, hx, hy, sleeve, skin, hr) {
-    var L = 38, dx = hx - sx, dy = hy - sy, d = Math.max(1, Math.min(Math.hypot(dx, dy), 2 * L - 0.5)), ux = dx / d, uy = dy / d;
-    var h = Math.sqrt(L * L - d * d / 4), mx = sx + ux * d / 2, my = sy + uy * d / 2, qx = -uy, qy = ux; if (qy < 0) { qx = -qx; qy = -qy; }
-    var ex = mx + qx * h, ey = my + qy * h;
-    var X = sx + ux * d, Y = sy + uy * d;
-    limb(c, sx, sy, ex, ey, sleeve, 20, 8); limb(c, ex, ey, X, Y, skin, 15, 8);
-    circ(c, X, Y, hr || 12); paint(c, skin, 4);
-  }
-  // o: x,y,dir, sex, mood, lx, ly, sq, lean, tilt, jump, shove, crouch, hand [hx,hy], hand2 [hx,hy], cream, blink, hold
-  function kid(c, sex, o) {
-    var skin = SKIN[sex], shirt = SHIRT[sex], cr = o.crouch || 0;
-    c.save(); c.translate(o.x + (o.shove || 0), o.y + (o.jump || 0)); c.scale(o.dir * 1.15, 1.15);
-    c.scale(1 + (o.sq || 0) * 0.5, 1 - (o.sq || 0));
-    c.translate(0, 0); c.rotate(o.lean || 0);
-    // nohy (vidět jen ve výskoku)
-    if ((o.jump || 0) < -6 || o.full) { limb(c, -16, -30, -22, 2, P.slate, 17, 8); limb(c, 16, -30, 24, 0, P.slate, 17, 8); ell(c, -26, 5, 15, 8); paint(c, P.red, 4); ell(c, 29, 3, 15, 8); paint(c, P.red, 4); }
-    c.translate(0, cr * 74);
-    // trup
-    c.beginPath(); c.moveTo(-36, -92); c.quadraticCurveTo(0, -106, 36, -92); c.lineTo(46, -8); c.lineTo(-46, -8); c.closePath(); paint(c, shirt, 4.4);
-    var h2 = o.hand2 || [-46, -64], h1 = o.hand || [40, -64];
-    arm(c, -30, -84, h2[0], h2[1], shirt, skin, o.mitt ? 16 : 12);
-    c.save(); c.translate(-12, -150); c.rotate(o.tilt || 0);
-    head(c, sex, { mood: o.mood, lx: o.lx, ly: o.ly, blink: o.blink, cream: o.cream, hat: o.hat });
-    c.restore();
-    arm(c, 30, -84, h1[0], h1[1], shirt, skin, o.mitt ? 16 : 12);
-    if (o.holdFn) o.holdFn(c, h1[0], h1[1]);
-    c.restore();
-  }
+  // zpětně kompatibilní hlava (avatary, ikony): staré názvy nálad se převedou na výrazy rigu
+  var MOOD = { idle: "idle", focus: "aim", yell: "throw", ouch: "hit", scared: "scared", happy: "joy", smug: "smug", dizzy: "dizzy", ko: "ko", peek: "scared" };
+  function head(c, sex, f) { head2(c, sex, { ex: f.ex || MOOD[f.mood] || "idle", lx: f.lx, ly: f.ly, blink: f.blink, t: f.t || 0, sweat: f.sweat, cream: f.cream, hat: f.hat }, f.sec || { h1: 0, h2: 0 }); }
 
   // ---------- předměty ----------
   function item(c, i, x, y, r, rot, t, resting) {
@@ -1205,7 +1382,7 @@ var Art = (function () {
   };
   // pruh zdraví: ploché tvary, společné pro HUD v DOM i pro statické návrhy
   return { P: P, SKIN: SKIN, SHIRT: SHIRT, HAIR: HAIR, ICONS: ICONS, circ: circ, ell: ell, rrect: rrect, fill: fill, line: line, paint: paint, hash: hash,
-    world: world, weather: weather, balconyFront: balconyFront, THEMES: THEMES, kid: kid, head: head, item: item, umbrella: umbrella, pigeon: pigeon, gift: gift, drop: drop, cream: cream };
+    world: world, weather: weather, balconyFront: balconyFront, THEMES: THEMES, char: char, head: head, headPos: headPos, noseAt: noseAt, feather: feather, poof: poof, impact: impact, trail: trail, dust: dust, item: item, umbrella: umbrella, pigeon: pigeon, gift: gift };
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = Art;
 </script>
@@ -1328,7 +1505,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   let play = null;     // právě přehrávaný hod
   let selItem = 0, selPower = 0, draftStamp = 0, selDef = 1;
   let endTimer = null, endHidden = false;
-  const kids = [{ throwT: -9, hitT: -9, happyT: -9, shockT: -9, react: null }, { throwT: -9, hitT: -9, happyT: -9, shockT: -9, react: null }];
+  const mkKid = () => ({ throwT: -9, hitT: -9, happyT: -9, shockT: -9, tauntT: -9, koT: -9, koG: -1, hitBig: 1, react: null });
+  const kids = [mkKid(), mkKid()];
 
   const nameOf = j => !g ? (j ? ($("name1").value.trim() || "Soupeř") : ($("name0").value.trim() || "Ty")) : j ? g.o : g.x;
   const sexOf = j => { const xs = g ? g.xs : demoSex; return j === 0 ? xs : xs === "k" ? "h" : "k"; };
@@ -1394,7 +1572,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
       const fr = res.frames[pl.f], a = fr.find(p => p[4] === 0);
       if (a) pl.lead = { x: a[0] / U, y: a[1] / U };
       trail.push(fr.filter(p => p[4] === 0).map(p => [p[0] / U, p[1] / U]));
-      if (trail.length > 14) trail.shift();
+      if (trail.length > 20) trail.shift();
     }
     if (pl.f >= res.frames.length + pl.hold) finishPlay();
   }
@@ -1440,7 +1618,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
       burst(P.x + P.dir * 30, P.y - 230, 34, "confetti", { sp: 7, up: 7, size: 9, life: 1.9 });
     }
     skipped = false;
-    endTimer = setTimeout(() => { if (overOf() && caughtUp() && (view === "play")) show("end"); }, 800);
+    endTimer = setTimeout(() => { if (overOf() && caughtUp() && (view === "play")) show("end"); }, overOf() && overOf().win != null && !calm() ? 2600 : 800);
   }
   const seenKey = () => "pol-seen-" + room.id;
   function saveSeen() { if (room && g && !solo) store.set(seenKey(), JSON.stringify({ gn: g.gn, k: shownK })); }
@@ -1460,48 +1638,49 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     const lim = calm() ? Math.ceil(n / 3) : n;
     for (let i = 0; i < lim; i++) {
       const a = Math.random() * Math.PI * 2, sp = (opts.sp || 5) * (0.4 + Math.random());
-      parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - (opts.up || 2), life: 0, max: (opts.life || 1.2) * (0.7 + Math.random() * 0.6), type, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3, size: (opts.size || 8) * (0.6 + Math.random() * 0.8), color: opts.color });
+      parts.push({ x, y, vx: Math.cos(a) * sp + (opts.bx || 0), vy: Math.sin(a) * sp - (opts.up || 2), life: 0, max: (opts.life || 1.2) * (0.7 + Math.random() * 0.6), type, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3, size: (opts.size || 8) * (0.6 + Math.random() * 0.8), color: opts.color });
     }
   }
-  function itemBurst(item, x, y, big) {
-    if (item === 0) burst(x, y, big ? 22 : 14, "feather", { sp: 4, up: 3, life: 1.8, size: 11 });
-    else if (item === 1) burst(x, y, 10, "paper", { sp: 4, size: 9 });
-    else if (item === 2) burst(x, y, 26, "drop", { sp: 7, up: 3, size: 7, color: "#62B6FF" });
-    else if (item === 3) burst(x, y, 8, "star", { sp: 4, size: 10, color: "#FFD23F" });
-    else burst(x, y, 20, "crumb", { sp: 6, up: 3, size: 8 });
+  function itemBurst(item, x, y, big, vd) {
+    if (item === 0) burst(x - (vd || 0) * 30, y - 56, big ? 4 : 3, "feather", { sp: 1.6, up: 4.2, life: 2.4, size: 9, bx: (vd || 0) * 2.8 });
+    else if (item === 1) burst(x, y, 6, "paper", { sp: 4, size: 9 });
+    else if (item === 2) burst(x, y, 20, "drop", { sp: 7, up: 3, size: 7, color: "#62B6FF" });
+    else if (item === 3) burst(x, y, 6, "star", { sp: 4, size: 10, color: "#FFD23F" });
+    else burst(x, y, 14, "crumb", { sp: 6, up: 3, size: 8 });
   }
   function fx(e, pl, quiet) {
     if (e.who != null && typeof e.d === "number") pl.hp[e.who] = Math.max(0, Math.min(100, pl.hp[e.who] + e.d));
     if (quiet) return;
     fxLog.push(e.type); fxCount++; if (fxLog.length > 60) fxLog.shift();
     const C = calm();
+    // žádné texty přes hru: zásah, úhyb i minutí se čtou z postav, efektů a pruhu zdraví
     switch (e.type) {
       case "launch":
         kids[e.who].throwT = nowS();
-        if (e.s === 0) { burst(e.x, e.y + 6, 5, "dust", { sp: 2.4, up: 0.5, size: 9, life: 0.55 }); if (e.who === me) buzz(8); }
+        if (e.s === 0 && e.who === me) buzz(8);
         break;
-      case "heal": pop(e.x, e.y, `+${e.d}`, "#3DCB77", 42); burst(e.x, e.y + 30, 6, "steam", { sp: 1, up: 2, size: 12, life: 1.4 }); break;
+      case "heal": burst(e.x, e.y + 30, 6, "steam", { sp: 1, up: 2, size: 12, life: 1.4 }); break;
       case "hit": case "head": case "splash": {
-        const head = e.type === "head", ko = pl.hp[e.who] <= 0;
+        const head = e.type === "head", ko = pl.hp[e.who] <= 0, d = Math.abs(e.d || 0), kd = kids[e.who];
         // hit-stop: hra na chvíli zamrzne, postava se pak zhoupne až po zastavení (hitT je v budoucnu)
         const stop = C ? 0 : ko ? 0.3 : head ? 0.12 : e.type === "splash" ? 0.06 : 0.085;
         stopT = Math.max(stopT, stop);
-        kids[e.who].hitT = nowS() + stop; kids[e.who].hitBig = head || ko ? 1.3 : 1;
+        // síla reakce podle poškození: lehký zásah jen mrkne, hlava a K.O. zalomcují celou postavou
+        kd.hitT = nowS() + stop; kd.hitBig = ko ? 1.3 : Math.min(1.35, 0.55 + Math.min(1, d / 35) * 0.7 + (head ? 0.15 : 0));
+        if (ko) { kd.koT = nowS() + stop + 0.5; kd.koG = g.gn; }
+        kick(e.who, kd.hitBig);
         if (e.who !== pl.res.t) kids[pl.res.t].happyT = nowS() + stop;
         pl.hit = true;
-        pop(e.x + (e.x > W / 2 ? -175 : 175), e.y - 36, String(e.d), "#FF5A4D", head ? 56 : 48);
-        // jedno slovo na zásah: výbuch balónku hned po zásahu hlavy další výkřik nedostane
-        if (!(e.type === "splash" && nowS() - (pl.sfxT || -9) < 0.6)) {
-          pl.sfxT = nowS();
-          pop(e.x, e.y - 150, ko ? "K.O.!" : head ? "DO HLAVY!" : e.type === "splash" ? "ŽBLUŇK!" : SFX[e.item], ko || head ? "#FFD23F" : e.type === "splash" ? "#4DB5FF" : "#FFFFFF", ko ? 78 : head ? 60 : 52, "sfx");
-        }
-        if (e.rd) { kids[e.who].react = { t: nowS() + stop, kind: e.rd, ok: 0 }; pop(e.x + (e.x > W / 2 ? -175 : 175), e.y + 18, "špatný tip", "#FFFFFF", 26); }
-        if (e.type !== "splash") itemBurst(e.item, e.x, e.y, head);
-        parts.push({ x: e.x, y: e.y, vx: 0, vy: 0, life: 0, max: 0.26, type: "flash", rot: 0, vr: 0, size: ko ? 84 : head ? 62 : 46 });
+        if (e.rd) kd.react = { t: nowS() + stop, kind: e.rd, ok: 0 };
+        const vd = layoutNow().players[e.who].dir;
+        if (e.type !== "splash") itemBurst(e.item, e.x, e.y, head || ko, vd);
+        parts.push({ x: e.x, y: e.y, vx: 0, vy: 0, life: 0, max: 0.24, type: "impact", rot: vd < 0 ? 0 : Math.PI, vr: 0, size: ko ? 74 : head ? 62 : 50, layer: 0 });
+        parts.push({ x: e.x - vd * 18, y: e.y + 10, vx: 0, vy: 0, life: 0, max: 0.5, type: "poof", rot: 0, vr: 0, size: ko ? 40 : head ? 32 : 26, layer: 0 });
         if (e.item === 4 && e.who !== pl.res.t) pl.cake[e.who] = 1;
         if (!C) {
-          shake = ko ? 30 : head ? 20 : 12;
-          punch = ko ? 0.11 : head ? 0.075 : 0.05; punchAt = { x: e.x, y: e.y };
+          // jemný otřes jen u hlavy a K.O.; ostatní zásahy nese hit-stop a postava
+          if (ko || head) shake = ko ? 16 : 9;
+          punch = ko ? 0.08 : head ? 0.05 : 0.03; punchAt = { x: e.x, y: e.y };
           const chip = $("chip" + e.who); chip.classList.remove("hurt"); void chip.offsetWidth; chip.classList.add("hurt");
         }
         if (ko && !C) { pl.speed = Math.min(pl.speed, 0.55); pl.hold = Math.min(pl.hold, 34); } // poslední úder dohraj zpomaleně
@@ -1511,23 +1690,22 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
       case "dodge": case "catch": {
         const stop = C ? 0 : 0.12; stopT = Math.max(stopT, stop);
         kids[e.who].react = { t: nowS() + stop, kind: e.def, ok: 1 }; kids[pl.res.t].shockT = nowS() + stop;
+        kids[e.who].tauntT = nowS() + stop + 0.9;
         pl.hit = true;
-        pop(e.x + (e.x > W / 2 ? -165 : 165), e.y - 70, e.def === 1 ? "DOLŮ!" : e.def === 2 ? "MÁM TO!" : "HOP!", "#3DCB77", 54, "sfx");
-        if (e.def === 2) burst(e.x, e.y, 8, "star", { sp: 4, size: 9, color: "#FFD23F" });
-        if (!C) { shake = Math.max(shake, 6); punch = 0.04; punchAt = { x: e.x, y: e.y }; }
+        if (e.def === 2) burst(e.x, e.y, 6, "star", { sp: 4, size: 9, color: "#FFD23F" });
+        if (!C) { punch = 0.025; punchAt = { x: e.x, y: e.y }; }
         buzz(e.who === me ? 24 : 10);
         break;
       }
-      case "rage": pop(e.x + (e.x > W / 2 ? -150 : 150), e.y - 20, "VZTEK!", "#FF5A4D", 50, "sfx"); burst(e.x, e.y + 50, 10, "steam", { sp: 1.6, up: 2, size: 12, life: 1.2 }); break;
-      case "combo": pop(e.x + (e.x > W / 2 ? -190 : 190), e.y - 112, `KOMBO ×${e.n}`, "#FF8A3D", 42, "sfx"); break;
-      case "block": pl.blocked = true; pop(e.x, e.y - 60, "DEŠTNÍK!", "#FF5C93", 42, "sfx"); burst(e.x, e.y, 10, "star", { sp: 4, size: 9, color: "#FFFFFF" }); break;
-      case "burst": missPop(e, pl); burst(e.x, e.y, 24, "drop", { sp: 7, up: 3, size: 7, color: "#62B6FF" }); if (!C) shake = Math.max(shake, 5); break;
-      case "bounce": if (pl.res.turn.i === 3) pop(e.x, e.y - 30, Math.random() < 0.5 ? "kvák" : "boing", "#FFD23F", 28); burst(e.x, e.y + 10, 4, "dust", { sp: 2, size: 9 }); break;
+      case "rage": burst(e.x, e.y + 50, 10, "steam", { sp: 1.6, up: 2, size: 12, life: 1.2 }); break;
+      case "block": pl.blocked = true; burst(e.x, e.y, 8, "star", { sp: 4, size: 9, color: "#FFFFFF" }); break;
+      case "burst": missPop(e, pl); burst(e.x, e.y, 20, "drop", { sp: 7, up: 3, size: 7, color: "#62B6FF" }); break;
+      case "bounce": burst(e.x, e.y + 10, 1, "dust", { sp: 0, up: 0, size: 1, life: 0.6 }); break;
       case "thud": itemBurst(pl.res.turn.i, e.x, e.y, false); break;
-      case "land": missPop(e, pl); burst(e.x, e.y + 14, 6, "dust", { sp: 2, size: 10 }); if (pl.res.turn.i === 4) burst(e.x, e.y, 12, "crumb", { sp: 4, size: 7 }); break;
-      case "pigeon": pl.pigeonS = e.s; pop(e.x, e.y - 50, "VRKÚ!", "#B9A8FF", 40, "sfx"); burst(e.x, e.y, 12, "feather", { sp: 4, size: 9, color: "#B8B5DB", life: 1.6 }); break;
-      case "bonus": pl.giftHit = true; pop(e.x, e.y - 30, e.kind === "hp" ? `+${e.d} život` : `+1 ${ITEMS[e.item].name}`, "#3DCB77", 34); burst(e.x, e.y, 26, "confetti", { sp: 6, size: 8 }); break;
-      case "split": burst(e.x, e.y, 10, "star", { sp: 3, size: 8, color: "#fff" }); break;
+      case "land": missPop(e, pl); burst(e.x, e.y + 14, 1, "dust", { sp: 0, up: 0, size: 1, life: 0.7 }); if (pl.res.turn.i === 4) burst(e.x, e.y, 10, "crumb", { sp: 4, size: 7 }); break;
+      case "pigeon": pl.pigeonS = e.s; burst(e.x, e.y, 5, "feather", { sp: 3, size: 9, color: "#E4E0FF", life: 1.8 }); break;
+      case "bonus": pl.giftHit = true; burst(e.x, e.y, 22, "confetti", { sp: 6, size: 8 }); break;
+      case "split": burst(e.x, e.y, 8, "star", { sp: 3, size: 8, color: "#fff" }); break;
     }
     renderHud();
   }
@@ -1537,7 +1715,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   function missPop(e, pl) {
     if (!pl.miss || pl.missShown || pl.blocked) return;
     pl.missShown = true;
-    pop(e.x, Math.min(e.y, GROUND) - 64, MISS[(Math.random() * MISS.length) | 0], "#FFFFFF", 40, "sfx");
+    kids[pl.res.o].tauntT = nowS() + 0.25; // soupeř se vysměje, že to bylo mimo
   }
 
   // ---------- kamera a plátno ----------
@@ -1590,7 +1768,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
       if (play.lead) return play.lead.x;
     }
     if (play) { const p = L.players[play.res.t]; return p.x + p.dir * 130; }
-    const t = g ? (overOf() ? (overOf().win ?? 0) : thrower()) : 0;
+    const t = g ? (overOf() ? (overOf().win == null ? 0 : 1 - overOf().win) : thrower()) : 0; // po konci kamera drží poraženého: K.O. je pointa
     const p = L.players[me !== null && g && !overOf() ? (canThrow() ? me : thrower()) : t];
     return p.x + p.dir * 130;
   }
@@ -1652,15 +1830,17 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     Art.world(ctx, L, v, calm() ? 0 : t, th);
     drawDebris();
     drawEventProps(L, t);
+    drawParticles(0);
     for (const j of [0, 1]) drawKid(L.players[j], j, t);
     const st = play ? rep.states[play.k] : shownState();
     for (const j of [0, 1]) if (st.shield[j] && !(play && play.blocked && j === play.res.o && false)) Art.umbrella(ctx, L.players[j].x, L.players[j].y, L.players[j].dir, t);
     Art.balconyFront(ctx, L, 0, th); Art.balconyFront(ctx, L, 1, th);
+    drawKidsOver(t);
     Art.weather(ctx, v, calm() ? 0 : t, th);
     drawProjectiles(t);
     drawAim(L);
-    drawParticles();
-    drawTexts();
+    drawParticles(1);
+    $("banner").classList.toggle("quiet", view === "play" || dragHintOn);
     drawBubble(L, t);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     drawOffscreen(L, v);
@@ -1683,8 +1863,12 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     const bob = calm() ? 0 : Math.sin(t * 2.6) * 3, dx = span * 0.21;
     for (const [j, x] of [[0, 800 - dx], [1, 800 + dx]]) {
       const dir = j ? -1 : 1;
-      Art.kid(ctx, sexOf(j), { x, y: 880 + 4 + (j ? -bob : bob), dir, full: 1, mood: j ? "smug" : "focus", lx: 0.9, ly: -0.05, lean: -0.04, hand: [60, -120], hand2: [-46, -66],
-        holdFn: (c, hx, hy) => Art.item(c, j ? 3 : 0, hx + 6, hy - 14, 22, 0.3 * (j ? -1 : 1), 0, false) });
+      const br = calm() ? 0 : Math.sin(t * 2.2 + j * 2.1);
+      const o = { x, y: 880 + 4 + (j ? -bob : bob), dir, k: 1.25, legs: 1, t, ex: j ? "smug" : "tense", lx: 0.9, ly: -0.05, blink: 0, sy: 1 + br * 0.013, sx: 1 - br * 0.007, sec: { h1: br * 0.12, h2: -br * 0.12, hem: br * 0.2 }, sweat: j ? 0 : 0.5,
+        hold: (c, hx, hy) => Art.item(c, j ? 3 : 0, hx + 6, hy - 12, 22, -0.3, 0, false) };
+      if (j) Object.assign(o, { lean: -0.04, a1: [1.0, 1.8], a2: [-0.35, -0.1] });
+      else Object.assign(o, { lean: -0.2, a1: [-2.05, -2.7], a2: [1.35, 1.5], h2: "open" });
+      Art.char(ctx, sexOf(j), o);
     }
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     // název
@@ -1697,82 +1881,142 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   }
 
   // ---------- postavy ----------
-  const lerp = (a, b, u) => a + (b - a) * u, clamp01 = u => Math.max(0, Math.min(1, u)), easeOut = u => 1 - Math.pow(1 - u, 3);
+  const lerp = (a, b, u) => a + (b - a) * u, clamp01 = u => Math.max(0, Math.min(1, u)), easeOut = u => 1 - Math.pow(1 - u, 3), easeIn = u => u * u * u;
+  const KS = 1.2, KDY = 14; // měřítko postavy a posun dolů: hlava sedí na hitboxu hlavy
   const heldItem = j => (j === me && canThrow() ? selItem : 0);
-  function kidPose(j, t) {
-    const k = kids[j], n = nowS(), C = calm(), L = layoutNow(), Pl = L.players[j], dir = Pl.dir;
-    const o = { mood: "idle", lx: 0.92, ly: -0.12, sq: C ? 0 : Math.sin(t * 2.2 + j * 2) * 0.012, lean: 0, tilt: 0, jump: 0, shove: 0, crouch: 0, hand: [40, -64], hand2: [-46, -66], mitt: false, blink: 0, cream: false, hold: -1 };
-    if (!C && (t * 0.8 + j * 1.7) % 4 < 0.12) o.blink = 1;
+  // pružiny vlasů a lemu: poháněné pohybem hlavy mezi snímky
+  const spr = [0, 1].map(() => ({ h1: 0, v1: 0, h2: 0, v2: 0, hm: 0, vm: 0, px: null, py: 0, pt: 0 }));
+  function kick(j, m) { const s = spr[j]; s.v1 += 9 * m; s.v2 -= 9 * m; s.vm += 7 * m; }
+  const sprStep = (s, x, v, tg, dt) => { const a = -46 * (s[x] - tg) - 7 * s[v]; s[v] += a * dt; s[x] += s[v] * dt; };
+  const poseCache = { t: -1, o: [null, null] };
+  const kidPose = (j, t) => { if (poseCache.t !== t) { poseCache.t = t; poseCache.o = [buildPose(0, t), buildPose(1, t)]; } return poseCache.o[j]; };
+  const HOLD_ARM = [1.0, 1.8], DEF_A1 = [0.45, 1.2], DEF_A2 = [-0.35, -0.1];
+  function buildPose(j, t) {
+    const k = kids[j], n = nowS(), C = calm(), L = layoutNow(), Pl = L.players[j], dir = Pl.dir, sex = sexOf(j);
+    const st = play ? rep.states[play.k] : shownState(), hp = play ? play.hp[j] : st.hp[j];
+    const o = { dir, k: KS, x: Pl.x, y: Pl.y + KDY, ex: "idle", lx: 0.92, ly: -0.12, blink: 0, t, sx: 1, sy: 1, bx: 0, by: 0, lean: 0, hr: 0, h1: "fist", h2: "fist", a1: DEF_A1.slice(), a2: DEF_A2.slice(), hold: -1, legs: 1, sweat: 0, shiver: 0, hat: hatOf(j) };
+    // nádech a mrknutí
+    const br = C ? 0 : Math.sin(t * 2.3 + j * 2.1), per = 3.3 + j * 0.9, ph = (t + j * 1.37) % per;
+    o.sy = 1 + br * 0.013; o.sx = 1 - br * 0.007; o.a1[0] += br * 0.03; o.a2[0] -= br * 0.03;
+    o.blink = C ? 0 : ph < 0.15 ? Math.sin(ph / 0.15 * Math.PI) : 0;
     // kam se kouká: letící věc, jinak soupeř
     if (play && play.lead && play.f >= 0 && play.f < play.res.frames.length) {
       const hx = Pl.x - 12 * dir, hy = Pl.y - 150, dx = (play.lead.x - hx) * dir, dy = play.lead.y - hy, d = Math.max(1, Math.hypot(dx, dy));
       o.lx = dx / d; o.ly = dy / d;
     }
-    const st = play ? rep.states[play.k] : shownState();
     o.cream = !!(st.caked[j] || (play && play.cake[j]));
+    const ov = over(), done = !!(ov && caughtUp() && !play && !titleMode());
+    const lost = done && (ov.win == null || ov.win !== j), weak = hp > 0 && hp <= 25;
+    // málem K.O.: málo životů, třes, pot, unavený výraz
+    if (weak) { o.ex = "weak"; o.lean = 0.2; o.hr = 0.28; o.sy *= 0.97; o.a1 = [0.06, 0.0]; o.a2 = [-0.05, 0.02]; o.h1 = o.h2 = "open"; o.sweat = 1; o.shiver = C ? 0 : 0.9; o.lx = 0.5; o.ly = 0.4; }
     const throwerNow = !over() && !play && thrower() === j && g;
-    if (throwerNow) o.hold = j === me ? selItem : 0;
-    if (aim && me === j && canThrow()) {
-      const pw = aim.pow;
-      o.sq = 0.06 * pw; o.lean = -0.1 * pw; o.mood = "focus"; o.hold = selItem;
-      o.hand = [lerp(-20, -84, pw), lerp(-96, -112, pw)]; o.lx = 0.95; o.ly = -0.3;
-    } else if (kb.on && me === j && canThrow()) { o.mood = "focus"; o.hold = selItem; o.hand = [-60, -108]; o.lx = 0.95; o.ly = -0.3; }
+    if (throwerNow) { o.hold = j === me ? selItem : 0; o.a1 = HOLD_ARM.slice(); }
+    // míření: nápřah dozadu, druhá ruka míří na cíl
+    if ((aim && me === j && canThrow()) || (kb.on && me === j && canThrow())) {
+      const pw = aim && me === j ? aim.pow : kb.pow;
+      o.hold = selItem; o.back = true; o.ex = pw > 0.55 ? "tense" : "aim"; o.lx = 0.95; o.ly = -0.2; o.lean = -0.1 - 0.14 * pw;
+      o.sy = 1 - 0.07 * pw; o.sx = 1 + 0.04 * pw; o.a1 = [lerp(-1.4, -2.25, pw), lerp(-1.8, -3.0, pw)]; o.a2 = [1.45, 1.6]; o.h2 = "point";
+      o.sweat = pw > 0.6 ? 0.5 : 0; o.shiver = !C && pw > 0.92 ? 0.7 : 0;
+    }
     // incoming: obránce vidí letící věc a leká se
-    let ant = 0, antKind = 0; // předvídání: obránce začne dělat to, co zvolil, ještě než věc dorazí (reakce po dotyku pak plynule navazuje)
+    let ant = 0, antKind = 0;
     if (play && play.res.o === j && play.lead && play.f >= 0 && play.f < play.res.frames.length) {
       const dist = Math.abs(play.lead.x - Pl.x);
-      if (!play.hit && dist < 430) { o.mood = "scared"; o.crouch = 0.1; }
+      if (!play.hit && dist < 430) { o.ex = "scared"; o.by = Math.max(o.by, 4); o.lean = -0.06; o.sweat = 0.6; }
       const dk = rep.states[play.k].def[j];
       if (dk && !C && dist < 400) { ant = clamp01((400 - dist) / 250); antKind = dk; }
     }
-    // hod
+    // hod: nápřah je už v míření, tady švih s protažením, puštění, dokmit
     const st0 = n - k.throwT;
-    if (st0 < 0.6) {
-      const u = st0 / 0.6;
-      o.sq = C ? 0 : -0.1 * Math.exp(-u * 4) * Math.cos(u * 11); o.lean = 0.09 * (1 - u); o.mood = "yell";
-      const a = clamp01(u / 0.28);
-      o.hand = [lerp(-70, 66, easeOut(a)), lerp(-112, -152, easeOut(a))]; o.hold = u < 0.12 ? (play ? play.res.turn.i : 0) : -1;
+    if (st0 >= 0 && st0 < 1.2) {
+      const w = clamp01(st0 / 0.09), e = easeOut(w), s = Math.max(0, st0 - 0.09), sm = easeOut(clamp01(s / 0.5)), dm = C ? 0 : Math.exp(-s * 6);
+      if (st0 < 0.6) o.ex = "throw";
+      o.lx = 1; o.ly = 0.05; o.h1 = "open";
+      o.a1 = [lerp(lerp(-2.25, 1.9, e), DEF_A1[0], sm), lerp(lerp(-3.0, 1.9, e), DEF_A1[1], sm)];
+      o.a2 = [lerp(1.45, DEF_A2[0], sm), lerp(1.6, DEF_A2[1], sm)];
+      o.h2 = sm > 0.6 ? "fist" : "point";
+      o.sy = C ? 1 : 1 + (w < 1 ? lerp(-0.07, 0.1, e) : 0.1 * dm * Math.cos(s * 16));
+      o.sx = 2 - o.sy;
+      o.lean = C ? 0 : w < 1 ? lerp(-0.24, 0.32, e) : 0.32 * dm * Math.cos(s * 9);
+      o.hold = st0 < 0.05 ? (play ? play.res.turn.i : 0) : -1; o.back = true;
     }
     // reakce Uhni!
-    const r = k.react, reacting = r && n >= r.t && n - r.t < 1.0;
-    if (ant > 0 && !reacting && !(k.hitT > n - 1.1 && n >= k.hitT)) {
-      const ea = easeOut(ant);
-      if (antKind === 1) { o.crouch = Math.max(o.crouch, ea); o.lx = 0.95; o.ly = -0.5; }
-      else if (antKind === 2) { o.mitt = true; o.hand = [lerp(40, 88, ea), lerp(-64, -134, ea)]; o.hand2 = [lerp(-46, 74, ea), lerp(-66, -94, ea)]; }
-      else if (antKind === 3) { o.jump = Math.min(o.jump, -130 * ea); o.hand = [-52, -150]; o.hand2 = [-30, -170]; }
-      if (ea > 0.5) o.mood = "scared";
-    }
+    const r = k.react, reacting = r && n >= r.t && n - r.t < 1.0, justHit = k.hitT > n - 1.3 && n >= k.hitT;
+    const defend = (kind, ea) => {
+      if (kind === 1) { o.by = Math.max(o.by, 62 * ea); o.lean = 0.12 * ea; o.lx = 0.95; o.ly = -0.5; o.a1 = [lerp(o.a1[0], 2.7, ea), lerp(o.a1[1], 2.9, ea)]; o.a2 = [lerp(o.a2[0], -2.6, ea), lerp(o.a2[1], -2.9, ea)]; o.h1 = o.h2 = "fist"; }
+      else if (kind === 2) { o.h1 = o.h2 = "mitt"; o.lean = 0.1 * ea; o.a1 = [lerp(o.a1[0], 1.75, ea), lerp(o.a1[1], 1.6, ea)]; o.a2 = [lerp(o.a2[0], 1.6, ea), lerp(o.a2[1], 1.5, ea)]; }
+      else if (kind === 3) { o.by = Math.min(o.by, -112 * ea); o.a1 = [lerp(o.a1[0], 2.75, ea), lerp(o.a1[1], 2.95, ea)]; o.a2 = [lerp(o.a2[0], -2.7, ea), lerp(o.a2[1], -2.95, ea)]; const q = clamp01(ea * 1.4); o.l1 = [0.7 * q, -0.4 * q]; o.l2 = [-0.3 * q, -0.9 * q]; }
+    };
+    if (ant > 0 && !reacting && !justHit) { defend(antKind, easeOut(ant)); if (ant > 0.5) o.ex = "scared"; }
     if (reacting) {
       const u = (n - r.t) / 1.0;
-      if (r.kind === 1) { const cc = u < 0.7 ? 1 : (1 - u) / 0.3; o.crouch = Math.max(o.crouch, cc); o.lx = 0.95; o.ly = -0.5; }
-      else if (r.kind === 2) { if (u < 0.8) { o.mitt = true; o.hand = [88, -134]; o.hand2 = [74, -94]; } }
-      else if (r.kind === 3) { if (!C) o.jump = -130 * (u < 0.35 ? 1 : 1 - easeOut(clamp01((u - 0.35) / 0.45))); o.hand = [-52, -150]; o.hand2 = [-30, -170]; }
-      if (r.ok) o.mood = u < 0.18 ? "scared" : "smug"; else if (u < 0.5) o.mood = "scared";
-      if (r.ok && r.kind === 3) o.mood = "happy";
+      if (r.kind === 1) defend(1, u < 0.7 ? 1 : (1 - u) / 0.3);
+      else if (r.kind === 2) { if (u < 0.8) defend(2, 1); }
+      else if (r.kind === 3) defend(3, C ? 0 : u < 0.35 ? 1 : 1 - easeOut(clamp01((u - 0.35) / 0.45)));
+      if (r.ok) o.ex = u < 0.18 ? "scared" : "smug"; else if (u < 0.5) o.ex = "scared";
+      if (r.ok && r.kind === 3) o.ex = "joy";
     }
+    // zásah podle síly (k.hitBig): squash, protažení, dokmit; hlava a ruce kopnou
     const ht = n - k.hitT;
-    if (ht < 1.1) { // ht < 0 = hit-stop: postava drží první, nejsilnější okamžik
-      const u = Math.max(0, ht) / 1.1, big = k.hitBig || 1;
-      o.sq = C ? 0.08 * (1 - u) : 0.3 * big * Math.exp(-u * 4) * Math.cos(u * 15); o.lean = -0.25 * big * (1 - u); o.tilt = C ? 0 : -0.22 * big * Math.exp(-u * 3) * Math.cos(u * 13); o.mood = "ouch";
-      o.hand = [-56, -138]; o.hand2 = [-34, -150];
-      if (!C) { o.shove = (j ? 1 : -1) * 16 * big * Math.exp(-u * 5); o.jump = Math.min(o.jump, -10 * big * Math.exp(-u * 9)); }
-    } else if (n - k.happyT < 1.6 && o.mood !== "smug") o.mood = "happy";
-    if (n - k.shockT < 0.9) o.mood = "scared";
-    const ov = over();
-    if (ov && caughtUp() && !play && !titleMode()) {
-      if (ov.win === j) { o.jump = C ? 0 : -Math.abs(Math.sin(t * 5)) * 26; o.mood = "happy"; o.hand = [-52, -176 + Math.sin(t * 10) * 6]; o.hand2 = [-30, -186 - Math.sin(t * 10) * 6]; }
-      else if (ov.win != null) { o.mood = "dizzy"; o.tilt = Math.sin(t * 3) * 0.12; }
+    if (ht < 1.3) {
+      const u = Math.max(0, ht), m = k.hitBig || 1, dec = C ? 0 : Math.exp(-u * 3.4), w = Math.exp(-u * 5);
+      o.ex = u < 0.55 ? "hit" : m > 1.1 ? "dizzy" : o.ex;
+      const sq = C ? 0.06 * (1 - u / 1.3) : 0.17 * m * dec * Math.cos(u * 13);
+      o.sy = 1 - sq; o.sx = 1 + sq * 0.8; o.lean = C ? -0.1 * m : -0.34 * m * dec * Math.cos(u * 9) - 0.06 * m * (1 - u / 1.3);
+      o.hr = C ? 0 : -0.3 * m * dec * Math.cos(u * 11); o.bx = C ? 0 : -9 * m * w; o.by = Math.min(o.by, C ? 0 : -7 * m * Math.exp(-u * 9));
+      o.a1 = [lerp(o.a1[0], 2.55, w), lerp(o.a1[1], 2.2, w)]; o.a2 = [lerp(o.a2[0], -2.5, w), lerp(o.a2[1], -2.95, w)]; o.h1 = o.h2 = "open"; o.hold = -1;
+      if (u < 0.55 && m >= 1.2) o.shiver = C ? 0 : 1.4 * Math.exp(-u * 4);
+    } else if (n - k.happyT < 1.6 && o.ex !== "smug" && !weak) o.ex = "joy";
+    if (n - k.shockT < 0.9) o.ex = "scared";
+    // posměšek po úhybu nebo minutí: dlouhý nos
+    const tt = n - k.tauntT;
+    if (tt >= 0 && tt < 1.9 && !justHit && !reacting && !weak) {
+      const nz = Art.noseAt(sex), wg = C ? 0 : Math.sin(t * 18);
+      o.ex = "taunt"; o.lx = 0.9; o.ly = 0; o.lean = -0.06; o.t1 = [nz[0] - 4 + wg * 1.5, nz[1] + 4, -1]; o.h1 = "mitt"; o.h1a = 2.2 + wg * 0.25; o.a2 = [-2.6, -3.0]; o.h2 = "mitt"; o.h2a = 3.1 - wg * 0.2;
     }
+    // konec bitvy: vítěz skáče s pěstmi, poražený se po závratích přehodí přes zábradlí
+    if (done && ov.win === j) {
+      const a = C ? 0 : Math.abs(Math.sin(t * 4.6)), q = clamp01(a * 5);
+      o.ex = "joy"; o.by = -18 * a; o.a1 = [1.3, 1.9 + Math.sin(t * 10) * 0.18]; o.a2 = [-1.0 + Math.sin(t * 10) * 0.06, -1.6]; o.h1 = o.h2 = "fist"; o.l1 = [0.7 * q, -0.4 * q]; o.l2 = [-0.3 * q, -0.9 * q];
+      o.lean = 0; o.sweat = 0; o.shiver = 0; o.hr = 0; o.hold = -1; o.t1 = null;
+    }
+    const koAt = k.koG === g.gn ? k.koT : -9, koa = lost ? 9 : n - koAt;
+    if (koa >= 0 && (lost || hp <= 0)) {
+      const FALL = 1.95, d0 = 0.9; // závrať 0 až 0,9 s, pád do 1,5 s, pak visí a dokmitává
+      o.hold = -1; o.ex = "dizzy"; o.sweat = 0; o.shiver = 0; o.t1 = null;
+      o.a1 = [0.06, 0.0]; o.a2 = [-0.05, 0.02]; o.h1 = o.h2 = "open";
+      if (koa < d0) { o.hr = C ? 0 : Math.sin(koa * 8) * 0.26; o.lean = C ? 0.1 : 0.12 + Math.sin(koa * 6) * 0.14; o.sy = 1; o.sx = 1; }
+      else {
+        const f = clamp01((koa - d0) / 0.6), th = C ? FALL : FALL * easeIn(f) + (f >= 1 ? 0.07 * Math.exp(-(koa - d0 - 0.6) * 7) * Math.sin((koa - d0 - 0.6) * 18) : 0);
+        o.ex = "ko"; o.rot = th * dir; o.px = Pl.x; o.py = Pl.y - 48; o.lean = 0; o.hr = 0; o.sy = 1; o.sx = 1; o.by = 0; o.bx = 0;
+        const sway = C ? 0 : Math.sin(t * 2.4 + j) * 0.12 * clamp01(f);
+        o.a1 = [th + 0.35 + sway, th + 0.3 + sway]; o.a2 = [th - 0.3 - sway, th - 0.35 - sway]; o.l1 = [-0.05, -0.05]; o.l2 = [0.05, 0.05];
+      }
+    }
+    // pružiny: vlasy a lem reagují na pohyb hlavy
+    const hpz = Art.headPos(sex, o), s = spr[j], dt = Math.min(0.05, Math.max(0, t - s.pt)); s.pt = t;
+    if (s.px === null) { s.px = hpz[0]; s.py = hpz[1]; }
+    if (dt > 0 && !C) {
+      const vx = (hpz[0] - s.px) / dt * dir, vy = (hpz[1] - s.py) / dt, sw = Math.sin(t * 1.9 + j * 2) * 0.05;
+      const t1 = Math.max(-0.8, Math.min(0.8, -vx * 0.0022 + vy * 0.0007 + sw)), t2 = Math.max(-0.8, Math.min(0.8, vx * 0.0022 - vy * 0.0007 - sw));
+      sprStep(s, "h1", "v1", t1, dt); sprStep(s, "h2", "v2", t2, dt); sprStep(s, "hm", "vm", Math.max(-1, Math.min(1, vy * 0.002 - vx * 0.0015)), dt);
+    } else if (C) { s.h1 = s.h2 = s.hm = 0; }
+    s.px = hpz[0]; s.py = hpz[1];
+    o.sec = { h1: s.h1, h2: s.h2, hem: s.hm };
     return o;
   }
   const over = () => overOf();
+  const holdFn = (i, back) => back ? (c, hx, hy) => Art.item(c, i, hx - 38, hy - 4, ITEMS[i].r * 0.9, -0.9, 0, false) : (c, hx, hy) => Art.item(c, i, hx + 6, hy - 10, ITEMS[i].r * 0.95, -0.3, 0, false);
+  const poseHold = o => ({ ...o, hold: o.hold >= 0 ? holdFn(o.hold, o.back) : null });
+  // postava za zábradlím: ořez těsně pod zábradlím; přehozená přes zábradlí se kreslí až po něm (drawKidsOver)
   function drawKid(Pl, j, t) {
     const o = kidPose(j, t);
-    const hold = o.hold;
-    ctx.save(); ctx.beginPath(); ctx.rect(Pl.x - 700, Pl.y - 1200, 1400, 1200 + 4); ctx.clip(); // spodek stěny balkonu (Art.balconyFront končí na p.y + 4)
-    Art.kid(ctx, sexOf(j), { ...o, hat: hatOf(j), x: Pl.x, y: Pl.y, dir: Pl.dir, holdFn: hold >= 0 ? (c, hx, hy) => Art.item(c, hold, hx + 4, hy - 12, ITEMS[hold].r * 0.95, -0.3, 0, false) : null });
+    if (o.rot) return;
+    ctx.save(); ctx.beginPath(); ctx.rect(Pl.x - 700, Pl.y - 1200, 1400, 1200 + 4); ctx.clip();
+    Art.char(ctx, sexOf(j), poseHold(o));
     ctx.restore();
   }
+  function drawKidsOver(t) { for (const j of [0, 1]) { const o = kidPose(j, t); if (o.rot) Art.char(ctx, sexOf(j), poseHold(o)); } }
 
   function drawDebris() {
     const st = play ? rep.states[play.k] : shownState();
@@ -1801,10 +2045,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   function drawProjectiles(t) {
     if (!play || play.f < 0) return;
     const res = play.res, f = Math.min(play.f, res.frames.length - 1), fr = res.frames[f], i = res.turn.i;
-    for (let n = 0; n < trail.length; n++) {
-      ctx.fillStyle = `rgba(255,255,255,${0.12 + n * 0.02})`;
-      for (const [x, y] of trail[n]) { circ(ctx, x, y, 3 + n * 0.28); ctx.fill(); }
-    }
+    // stopa letu: zužující se pruh za předmětem
+    const tp = trail.map(a => a[0]).filter(Boolean);
+    if (tp.length > 2) Art.trail(ctx, tp, i === 1 ? 7 : 15, P.white, 0.55);
     for (const p of fr) {
       if (p[4] !== 0 && p[4] !== 1) continue;
       const x = p[0] / U, y = p[1] / U, r = p[5] / U;
@@ -1821,7 +2064,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
       const p = parts[i]; p.life += dt;
       if (p.life >= p.max) { parts.splice(i, 1); continue; }
       const k = dt * 60;
-      if (p.type === "feather" || p.type === "paper") { p.vx = p.vx * 0.94 + w * 0.03; p.vy = p.vy * 0.9 + 0.12; p.x += (p.vx + Math.sin(p.life * 6 + p.rot) * 1.4) * k; }
+      if (p.type === "feather" || p.type === "paper") { p.vx = p.vx * 0.94 + w * 0.03; p.vy = p.vy * 0.9 + (p.type === "feather" ? 0.08 : 0.12); p.x += (p.vx + Math.sin(p.life * 5 + p.rot) * 1.6) * k; if (p.type === "feather") p.rot += Math.sin(p.life * 5 + p.rot) * 0.03 * k; }
+      else if (p.type === "impact" || p.type === "poof" || p.type === "dust") { p.vy = 0; p.vx = 0; }
       else if (p.type === "steam") { p.vy = -1.2; p.x += Math.sin(p.life * 5 + p.rot) * 0.6 * k; }
       else if (p.type === "flash") { p.vy = 0; }
       else { p.vy += 0.32 * k; p.x += p.vx * k; }
@@ -1830,19 +2074,22 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     for (let i = texts.length - 1; i >= 0; i--) { const tx = texts[i]; tx.life += dt; tx.y -= 36 * dt; if (tx.life > tx.max) texts.splice(i, 1); }
   }
   function starPath(c, r) { c.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, q = i % 2 ? r * 0.48 : r; c.lineTo(Math.cos(a) * q, Math.sin(a) * q); } c.closePath(); }
-  function drawParticles() {
+  function drawParticles(layer) {
     for (const p of parts) {
-      const a = 1 - p.life / p.max;
-      ctx.globalAlpha = Math.max(0, a);
+      if ((p.layer === 0 ? 0 : 1) !== layer) continue;
+      const u = p.life / p.max, a = 1 - u;
+      ctx.globalAlpha = p.type === "feather" ? Math.max(0, Math.min(1, a * 2.2)) : Math.max(0, a);
       ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
-      if (p.type === "feather") { ctx.fillStyle = p.color || P.white; ell(ctx, 0, 0, p.size, p.size * 0.4); ctx.fill(); }
+      if (p.type === "feather") { ctx.globalAlpha = Math.max(0, Math.min(1, a * 2.4)); Art.feather(ctx, 0, 0, p.size * 3.4, 0, p.color || P.white); }
+      else if (p.type === "impact") { ctx.globalAlpha = 1; ctx.rotate(-p.rot); Art.impact(ctx, 0, 0, p.size, u, p.rot); }
+      else if (p.type === "poof") { ctx.globalAlpha = 1; ctx.rotate(-p.rot); Art.poof(ctx, 0, 0, p.size, u, P.white, 4); }
+      else if (p.type === "dust") { ctx.globalAlpha = 1; ctx.rotate(-p.rot); Art.dust(ctx, 0, 0, 0.9, u, "rgba(255,255,255,.85)"); }
       else if (p.type === "drop") { circ(ctx, 0, 0, p.size * 0.6); Art.fill(ctx, p.color || P.sky2); }
       else if (p.type === "crumb") { ctx.fillStyle = p.size > 9 ? P.pink : p.size > 7 ? P.cream : "#F6C98D"; ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size); }
       else if (p.type === "paper") { ctx.fillStyle = P.white; ctx.fillRect(-p.size / 2, -p.size / 3, p.size, p.size * 0.66); }
       else if (p.type === "star") { starPath(ctx, p.size); Art.fill(ctx, p.color || P.yellow); }
       else if (p.type === "confetti") { ctx.fillStyle = [P.yellow, P.pink, P.green, P.blue][Math.floor(p.size * 10) % 4]; ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2); }
       else if (p.type === "steam") { ctx.fillStyle = "rgba(255,255,255,.7)"; circ(ctx, 0, 0, p.size * (0.5 + p.life)); ctx.fill(); }
-      else if (p.type === "flash") { const u = p.life / p.max; ctx.globalAlpha = 1 - u; circ(ctx, 0, 0, p.size * (0.4 + u * 0.9)); ctx.lineWidth = 7 * (1 - u) + 1; ctx.strokeStyle = P.white; ctx.stroke(); }
       else { ctx.fillStyle = "rgba(255,255,255,.85)"; circ(ctx, 0, 0, p.size * (0.6 + p.life)); ctx.fill(); }
       ctx.restore();
     }
@@ -1945,7 +2192,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
         const p = preview[n][0]; if (!p || p[4] !== 0) break;
         if (p[1] / U < minY) continue;
         ctx.globalAlpha = 1 - n / preview.length * 0.7;
-        circ(ctx, p[0] / U, p[1] / U, Math.max(2.5, 7 - n * 0.1)); Art.fill(ctx, n % 4 === 1 ? P.white : INK);
+        const rr = Math.max(2.5, 7 - n * 0.1); circ(ctx, p[0] / U, p[1] / U, rr + 2.4); Art.fill(ctx, INK); circ(ctx, p[0] / U, p[1] / U, rr); Art.fill(ctx, n % 4 === 1 ? P.white : P.yellow);
         ctx.globalAlpha = 1;
       }
     } else {
@@ -2169,8 +2416,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     for (const j of [0, 1]) {
       const c = medCtx[j], o = kidPose(j, t);
       c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, 112, 112);
-      c.translate(56, 64); c.scale(0.8, 0.8);
-      Art.head(c, sexOf(j), { mood: o.mood, lx: j ? -0.8 : 0.8, ly: o.ly * 0.5, blink: o.blink, cream: o.cream, hat: hatOf(j) });
+      const K = sexOf(j) === "k"; c.translate(K ? 50 : 56, K ? 66 : 60); const sc = K ? 0.66 : 0.6; c.scale(j ? -sc : sc, sc);
+      Art.head(c, sexOf(j), { ex: o.ex, lx: o.lx > 0 ? 0.8 : o.lx, ly: o.ly * 0.5, blink: o.blink, cream: o.cream, hat: hatOf(j), sweat: o.sweat, t: o.t, sec: o.sec });
     }
   }
   let trickSig = "";
@@ -2676,7 +2923,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   const syncCustom = () => { $("customWrap").hidden = $("stakeSel").value !== "c"; $("rxSetupBox").hidden = $("starter").value === "0"; };
   $("starter").addEventListener("change", syncCustom);
   function drawSexHeads() {
-    [...$("sexSeg").children].forEach(b => { const c = b.querySelector("canvas"), x = c.getContext("2d"); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, 96, 96); x.translate(48, 56); x.scale(0.72, 0.72); Art.head(x, b.dataset.v, { mood: "smug", lx: 0.5, ly: 0 }); });
+    [...$("sexSeg").children].forEach(b => { const c = b.querySelector("canvas"), x = c.getContext("2d"); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, 96, 96); const K = b.dataset.v === "k"; x.translate(K ? 42 : 48, K ? 62 : 58); x.scale(K ? 0.6 : 0.5, K ? 0.6 : 0.5); Art.head(x, b.dataset.v, { ex: "smug", lx: 0.5, ly: 0 }); });
   }
   drawSexHeads();
   $("stakeSel").addEventListener("change", syncCustom);
