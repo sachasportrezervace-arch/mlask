@@ -7,6 +7,7 @@ PŘEVZATO 31. 10. – dodělává session na účtu P, jiná session sem nepíš
 ## 2026-10-31 – sólo režim „Zkusit sám“ / #solo (session na účtu P)
 - **Hotovo:** tlačítko „Zkusit sám“ vedle „Založit výzvu“ a adresa `#solo`: partie proti botovi (36 náhodných hodů, vybere nejlepší a přidá šum ±7 %, trefí asi 35 %, hází s pauzou ~1,2 s), bez sync, místnosti a odkazu, mimo sérii a kosmetiku (`startSolo`, `botMaybe`, `botThrow`). V HUD je „Bot(ka) · trénink“, na konci „Znovu“ a „Vyzvat soupeře“. Prostředí se losuje přes `Pol.pickMod`.
 - **Ověřeno lokálně:** `tests/solo.cjs` 42/42 (Chromium desktop + WebKit iPhone 13, 0 požadavků na mantledb, beze změny localStorage), uhni 4/4, mods 12/12, duel A 25/25, ui 137/137, vše exit 0.
+- **Nasazeno (ad5b85f), živě:** `node tests/solo.cjs https://sachasportrezervace-arch.github.io/mlask/` 42/42, exit 0.
 - **Otevřené:** když začíná bot, první obrana hráče je náhodná; test hraje dokonalým řešičem, takže partie jsou krátké.
 
 ## PŘEDÁVKA 2026-10-31 19:45 – redesign postav a efektů (session mlask-vizual, kontext plný)
