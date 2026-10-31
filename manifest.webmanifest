@@ -1,11 +1,11 @@
 {
-  "name": "Polštářovka",
-  "short_name": "Polštářovka",
-  "description": "Polštářová bitva přes ulici pro dva na jednom odkazu.",
+  "name": "Mlask!",
+  "short_name": "Mlask!",
+  "description": "Bitva přes ulici pro dva na jednom odkazu: házej, tajně uhýbej a dostaň ho dortem.",
   "lang": "cs",
   "display": "standalone",
-  "background_color": "#FF9A3C",
-  "theme_color": "#FF9A3C",
+  "background_color": "#BFE7F6",
+  "theme_color": "#BFE7F6",
   "icons": [
     { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

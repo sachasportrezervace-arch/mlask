@@ -1,5 +1,7 @@
 # Pracovní deník – Polštářovka
 
+PŘEVZATO 31. 10. – dodělává session na účtu P, jiná session sem nepíše.
+
 ## PŘEDÁVKA 2026-10-31 – kompletní přestavba (kontext plný)
 - **Zadání od Marka (přes session Piskvorky):** současný vzhled ani název se mu nelíbí. Chce „čistý plochý vektor jako reference, vlastní twist, vlastní design, UX/UI bez hnusu“.
   - Reference: nArtBox Boy vs Girl, `C:\Users\LEARTI~1\AppData\Local\Temp\claude\C--Users-le-artist-AppData-Roaming-Claude-scratch-workspaces-a6a7acfc-0a38-40ad-94ae-6ba230a3b53c-6a5adc0f-5814-4034-986e-41296f8d6841-scratch-2026-10-30-bcf3d5\922eab0b-50bc-40cb-b2dc-56155839c37f\images\4.png`. Nekopírovat.

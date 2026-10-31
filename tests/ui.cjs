@@ -94,6 +94,7 @@ const layout = p => p.evaluate(() => {
       await tdown(0, cx - d0 / 2, cy); await tdown(1, cx + d0 / 2, cy);
       for (let u = 1; u <= 5; u++) { const d = d0 + (d1 - d0) * u / 5; await tmove(0, cx - d / 2, cy); await tmove(1, cx + d / 2, cy); }
       await tup(0); await tup(1);
+      await new Promise(r => setTimeout(r, 300)); // kamera reaguje v dalším snímku, ať settle nevyhodnotí výchozí stav jako hotový
     }
     async function sling(pg, vx, vy, mouse) {
       const d = await pg.evaluate(([a, b]) => window.__pol.dragFor(a, b), [vx, vy]);
@@ -114,6 +115,7 @@ const layout = p => p.evaluate(() => {
     await P.goto(link);
     await P.waitForSelector("#intro:not([hidden])", { timeout: T });
     const vp = P.viewportSize();
+    await P.waitForTimeout(700); // karta se rozjíždí animací, měří se až hotová
     let bad = await audit(P);
     check(`výzva: všechny ovládací prvky >= 44 px (${vp.width}x${vp.height})`, bad.length === 0, bad.join(", "));
     await P.click("#acceptBtn");
@@ -138,7 +140,7 @@ const layout = p => p.evaluate(() => {
 
     // 3) mimo tah: jeden prst posouvá
     const c = { x: vp.width / (dev.viewport.width > dev.viewport.height ? 3 : 2), y: vp.height * 0.3 };
-    const defS = Math.max(0.15, Math.min(i0.CH / 900, i0.CW / 680)), fitS = Math.max(0.15, i0.CW / (i0.W + 60));
+    const defS = i0.defS, fitS = Math.max(0.15, i0.CW / (i0.W + 60));
     await drag1(c.x + 60, c.y, c.x - 60, c.y);
     await settle(P);
     let i1 = await info(P);
@@ -269,7 +271,7 @@ const layout = p => p.evaluate(() => {
   // manifest a hlavičky
   {
     const res = await fetch(URL + "manifest.webmanifest"), m = await res.json();
-    check("manifest.webmanifest: standalone, jméno, barvy, bez start_url", m.display === "standalone" && m.name === "Polštářovka" && m.theme_color === "#FF9A3C" && m.background_color === "#FF9A3C" && !("start_url" in m), JSON.stringify(Object.keys(m)));
+    check("manifest.webmanifest: standalone, jméno, barvy, bez start_url", m.display === "standalone" && m.name === "Mlask!" && m.theme_color === "#BFE7F6" && m.background_color === "#BFE7F6" && !("start_url" in m), JSON.stringify(Object.keys(m)));
     const okIcons = await Promise.all(m.icons.map(async ic => (await fetch(URL + ic.src)).status === 200));
     check("manifest: ikony se načtou", okIcons.every(Boolean) && m.icons.some(ic => ic.sizes === "512x512"));
     const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");

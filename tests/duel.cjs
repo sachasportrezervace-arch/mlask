@@ -101,6 +101,7 @@ function loadEngine() {
   // 3) celý zápas
   const plan = { 0: [[2, 0], [0, 1], [3, 4], [1, 2], [4, 0], [0, 0]], 1: [[0, 0], [2, 4], [4, 6], [3, 1], [0, 0], [1, 0]] };
   const used = [0, 0];
+  const checkDef = [];
   let turn = 0, detMismatch = 0, slowest = 0, noteSent = false, noteSeen = false, exactInputs = 0;
   while (turn < 40) {
     const ia = await info(A);
@@ -110,9 +111,12 @@ function loadEngine() {
     const [item, power] = plan[j][used[j]++ % plan[j].length];
     await P.evaluate(([i, pw]) => {
       const b = document.querySelector(`#itemsRow [data-item="${i}"]`); if (b && !b.disabled) b.click();
-      const pb = document.querySelector(`#powersRow [data-power="${pw}"]`); if (pw && pb && !pb.hidden && !pb.disabled) pb.click();
+      const pb = document.querySelector(`#hud button[data-power="${pw}"]`); if (pw && pb && !pb.hidden && !pb.disabled) pb.click();
     }, [item, power]);
-    if (turn === 1) { await P.fill("#vzkaz", "Tohle chytíš do nosu"); await P.click("#stamps .stampbtn >> nth=1"); noteSent = true; }
+    // Uhni!: každý hod si hráč tajně zvolí obranu (střídavě 1 / 2 / 3)
+    await P.click(`#defRow [data-def="${(turn % 3) + 1}"]`);
+    checkDef.push((await P.evaluate(() => window.__pol.info().selDef)) === (turn % 3) + 1);
+    if (turn === 1) { await P.click("#noteBtn"); await P.fill("#vzkaz", "Tohle chytíš do nosu"); await P.click("#stamps .chip >> nth=1"); noteSent = true; }
     const sel = await P.evaluate(() => window.__pol.info());
     const best = await P.evaluate(([i, pw]) => window.__pol.solve(i, pw), [sel.selItem, sel.selPower]);
     const k0 = sel.k;
@@ -135,6 +139,7 @@ function loadEngine() {
     turn++;
   }
   check("vzkaz k hodu dorazil soupeři", noteSeen);
+  check("Uhni!: volba obrany se po kliknutí propíše do stavu", checkDef.length > 0 && checkDef.every(Boolean), checkDef.length + " voleb");
   check(`determinismus: po každém z ${turn} hodů stejné HP na obou stranách`, detMismatch === 0, `${detMismatch} neshod`);
   check("vstupy hodu odpovídají gestu (kvantované vx/vy)", exactInputs === turn, `${exactInputs}/${turn}`);
   check("hod se u soupeře objeví do 8 s bez reloadu", slowest < 8000, `nejpomalejší ${slowest} ms`);
@@ -148,6 +153,9 @@ function loadEngine() {
   const r = Pol.replay(doc.g);
   const nodeHp = r.states[r.states.length - 1].hp;
   check("determinismus: Node (V8) z uložených vstupů = oba prohlížeče", JSON.stringify(nodeHp) === JSON.stringify(fa.hp) && JSON.stringify(fa.hp) === JSON.stringify(fb.hp), `Node ${nodeHp} · A ${fa.hp} · B ${fb.hp}`);
+  check("Uhni!: každý hod nese osmý prvek (obranu 0-3) a zakladatel první obranu rx", doc.g.T.every(t => t.length === 8 && Number.isInteger(t[7]) && t[7] >= 0 && t[7] <= 3) && Number.isInteger(doc.g.rx), JSON.stringify(doc.g.T.slice(0, 2)) + " rx " + doc.g.rx);
+  check("prostředí partie: m je 1-5, uložené v dokumentu a stejné u obou hráčů", doc.g.m >= 1 && doc.g.m <= 5 && doc.g.m === fa.m && fa.m === fb.m, "m " + doc.g.m + " (" + fa.m + "/" + fb.m + ")");
+  const m0 = doc.g.m, hatsBefore = fa.hat;
   check("místnost ukládá jen vstupy (předmět, trik, vx, vy jako celá čísla) a seed", Number.isInteger(doc.g.seed) && doc.g.T.every(t => t.slice(0, 4).every(Number.isInteger)) && !("hp" in doc.g));
 
   // 4) konec u obou
@@ -171,8 +179,11 @@ function loadEngine() {
   await W.waitForFunction(() => { const i = window.__pol.info(); return i.gn === 1 && i.view === "play"; }, null, { timeout: T });
   const nl = await info(L);
   check("odveta: nová bitva, začíná poražený", nl.k === 0 && nl.canThrow === true && JSON.stringify(nl.hp) === "[100,100]");
-  const ser = await W.evaluate(() => document.getElementById("chip0").textContent);
-  check("odveta dorazila i vítězi bez reloadu", (await info(W)).gn === 1, ser);
+  check("odveta dorazila i vítězi bez reloadu", (await info(W)).gn === 1);
+  const nw = await info(W);
+  check("odveta má jiné prostředí než předchozí bitva, shodně u obou", nl.m >= 1 && nl.m <= 5 && nl.m !== m0 && nl.m === nw.m, "m " + m0 + " -> " + nl.m + " / " + nw.m);
+  const winSeat = JSON.stringify(nl.hat);
+  check("postup v sérii: vítěz bitvy dostal čelenku (hat 1), poražený nic", nl.hat.filter(h => h === 1).length === 1 && nl.hat.filter(h => h === 0).length === 1, winSeat);
 
   // 7) reload uprostřed: soupeřka znovu otevře odkaz
   await B.reload();
