@@ -254,6 +254,12 @@ textarea.bubble{min-height:120px;resize:vertical;font-size:15px;line-height:1.4;
   #end .card .btn{min-height:44px;padding-top:6px;padding-bottom:6px}
   #end .ticket{padding-top:6px;padding-bottom:6px}
   #end .card .meta{font-size:13px}
+  /* karta nahoře a nižší, aby pod ní visel poražený; HUD pod kartou zmizí */
+  #end{align-items:start}
+  #end .card{margin:0;max-height:78vh;max-height:78dvh}
+  #endMeta{display:none}
+  #chip0,#chip1,#wind{transition:opacity .2s}
+  body:has(#end:not([hidden]):not(.wl)) #chip0,body:has(#end.wl:not([hidden])) #chip1,body:has(#end:not([hidden])) #wind{opacity:0}
   /* vyhrál hráč vpravo: karta jde doleva, na stranu poraženého, vítěz zůstane vidět */
   #end.wl{justify-items:start;padding:8px 14px calc(8px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));background:linear-gradient(270deg,rgba(29,33,69,0) 30%,rgba(29,33,69,.4) 60%)}
   .dock.idle .net{order:0;background:rgba(255,255,255,.94);border-radius:18px;padding:4px 12px;font-size:13px}
@@ -2645,7 +2651,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
       const d = shownState().def[me];
       meta = solo ? (d ? `Máš tajně připravené: ${DEFS[d].name}.` : "") : (sexOf(opp) === "h" ? "Její" : "Jeho") + " hod se tu přehraje sám." + (d ? ` Máš tajně připravené: ${DEFS[d].name}.` : "");
     }
-    $("waitText").textContent = text; $("waitBox").hidden = !text;
+    $("waitText").textContent = text; $("waitBox").style.visibility = text ? "" : "hidden"; // místo zůstává: změna výšky docku by po K.O. pumpovala zoom
     $("waitMeta").textContent = meta; $("waitMeta").hidden = !meta;
   }
   // nabídka menu (odkaz, pravidla, nová hra)
