@@ -125,25 +125,30 @@ const layout = p => p.evaluate(() => {
     // 2) hra, nejsem na tahu: tlačítka, rozložení
     let i0 = await info(P);
     check("nejsem na tahu (první hází zakladatel)", i0.canThrow === false);
+    // na šířku mimo tah má scéna celou šířku a ulice se vejde celá: Celá scéna se nenabízí a není co posouvat jedním prstem
+    const fits = i0.CW / i0.defS >= i0.W + 60;
     const rect = id => P.evaluate(id => { const r = document.getElementById(id).getBoundingClientRect(); return { w: r.width, h: r.height }; }, id);
     const fs = await rect("fsBtn"), ft = await rect("fitBtn");
     check("tlačítko Celá obrazovka existuje a má >= 44 x 44", !i0.fsHidden && fs.w >= 43.5 && fs.h >= 43.5, `${Math.round(fs.w)}x${Math.round(fs.h)}`);
-    check("tlačítko Celá scéna existuje a má >= 44 x 44", !i0.fitHidden && ft.w >= 43.5 && ft.h >= 43.5, `${Math.round(ft.w)}x${Math.round(ft.h)}`);
+    if (fits) check("ulice se vejde celá: tlačítko Celá scéna je skryté", i0.fitHidden === true);
+    else check("tlačítko Celá scéna existuje a má >= 44 x 44", !i0.fitHidden && ft.w >= 43.5 && ft.h >= 43.5, `${Math.round(ft.w)}x${Math.round(ft.h)}`);
     check("Celá scéna: popisek", (await P.innerText("#fitTxt")) === "Celá scéna");
     bad = await audit(P);
     check("hra: všechny viditelné ovládací prvky >= 44 px", bad.length === 0, bad.join(", "));
     let lay = await layout(P);
     check("bez vodorovného posunu stránky", lay.sw <= lay.iw && lay.bw <= lay.iw, `scrollWidth ${lay.sw}, body ${lay.bw}, okno ${lay.iw}`);
     check("HUD a tlačítka se nepřekrývají a nepřetékají", lay.over.length === 0 && lay.out.length === 0, [...lay.over, ...lay.out].join(", "));
-    check("obě tlačítka jsou dosažitelná (nic je nepřekrývá, nejsou pod okrajem)", lay.reach.fitBtn === true && lay.reach.fsBtn === true, JSON.stringify(lay.reach));
+    check("obě tlačítka jsou dosažitelná (nic je nepřekrývá, nejsou pod okrajem)", (fits || lay.reach.fitBtn === true) && lay.reach.fsBtn === true, JSON.stringify(lay.reach));
     await P.screenshot({ path: path.join(SHOTS, label.replace(/[^a-z0-9]+/gi, "-") + "-1-vychozi.png") });
 
     // 3) mimo tah: jeden prst posouvá
     const c = { x: vp.width / (dev.viewport.width > dev.viewport.height ? 3 : 2), y: vp.height * 0.3 };
     const defS = i0.defS, fitS = Math.max(0.15, i0.CW / (i0.W + 60));
+    let i1 = null;
+    if (!fits) {
     await drag1(c.x + 60, c.y, c.x - 60, c.y);
     await settle(P);
-    let i1 = await info(P);
+    i1 = await info(P);
     check("mimo tah: tah jedním prstem posune kameru", i1.man && Math.abs(i1.cam.x - i0.cam.x) > 20, `x ${Math.round(i0.cam.x)} → ${Math.round(i1.cam.x)}`);
     check("mimo tah: posun neměnil zoom", Math.abs(i1.cam.s - i0.cam.s) < 1e-6);
     await drag1(c.x - 100, c.y, c.x + 100, c.y);
@@ -155,6 +160,7 @@ const layout = p => p.evaluate(() => {
     await settle(P);
     i1 = await info(P);
     check("posun je omezený na svět (vpravo)", i1.vis.x1 <= i1.W + 70 + 1, `x1 ${Math.round(i1.vis.x1)}`);
+    }
 
     // 4) štípnutí
     const sBefore = (await info(P)).cam.s;
@@ -175,8 +181,39 @@ const layout = p => p.evaluate(() => {
       check("kolečko myši: zoom k ukazateli", (await info(P)).cam.s > w0 * 1.1);
     }
 
+    // 4b) štítek soupeře mimo obraz: výška balkonů se losuje podle místnosti, takže štítek občas leží pod prstem štípnutí.
+    // Štípnutí začaté na štítku musí zoomovat, samotné ťuknutí na štítek ukáže soupeře.
+    await pinch(vp.width / 2, i0.CH / 2, 60, 240);
+    await settle(P);
+    let iP = await info(P);
+    for (let n = 0; n < 8 && !iP.peek; n++) { await drag1(c.x + 100, c.y, c.x - 100, c.y); await settle(P); iP = await info(P); } // na šířku je soupeř vidět i přiblížený
+    check("při přiblížení je soupeř mimo obraz a ukazuje ho štítek", !!iP.peek, JSON.stringify(iP.vis));
+    if (iP.peek) {
+      const px = iP.peek.x + iP.peek.w / 2, py = iP.peek.y + iP.peek.h / 2, sg = px + 220 <= vp.width - 20 ? 1 : -1, ox = px + sg * 220; // druhý prst na volné straně štítku (na celou šířku leží štítek u okraje)
+      await tdown(0, px, py); await tdown(1, ox, py);
+      for (let u = 1; u <= 10; u++) { await tmove(1, ox + (px + sg * 40 - ox) * u / 10, py); await new Promise(r => setTimeout(r, 20)); }
+      await tup(0); await tup(1); await new Promise(r => setTimeout(r, 300));
+      await settle(P);
+      const iS = await info(P);
+      check("štípnutí začaté prstem na štítku soupeře zoomuje", iS.man && iS.cam.s < iP.cam.s * 0.8, `${iP.cam.s.toFixed(3)} → ${iS.cam.s.toFixed(3)}`);
+      await pinch(vp.width / 2, i0.CH / 2, 60, 240);
+      await settle(P);
+      iP = await info(P);
+      for (let n = 0; n < 8 && !iP.peek; n++) { await drag1(c.x + 100, c.y, c.x - 100, c.y); await settle(P); iP = await info(P); }
+      if (iP.peek) {
+        const tx = iP.peek.x + iP.peek.w / 2, ty = iP.peek.y + iP.peek.h / 2;
+        await tdown(0, tx, ty); await tup(0); await new Promise(r => setTimeout(r, 150));
+        const iT = await info(P);
+        check("ťuknutí na štítek soupeře ukáže soupeře", !iT.man && Math.abs(iT.goal.x - iP.peek.to) < Math.abs(iP.cam.x - iP.peek.to), `cíl x ${Math.round(iP.cam.x)} → ${Math.round(iT.goal.x)}, soupeř ${iP.peek.to}`);
+      } else check("ťuknutí na štítek soupeře ukáže soupeře", false, "štítek po přiblížení chybí");
+      await settle(P);
+      await drag1(c.x + 40, c.y, c.x - 40, c.y); // zpět do ruční kamery pro další krok
+      await settle(P);
+    }
+
     // 5) Celá scéna
     check("před Celou ulicí je ruční kamera zapnutá", (await info(P)).man === true);
+    if (!fits) {
     await P.click("#fitBtn");
     let iF = await info(P);
     check("Celá scéna zruší ruční kameru", iF.man === false && iF.fit === true);
@@ -191,6 +228,7 @@ const layout = p => p.evaluate(() => {
     await settle(P);
     iF = await info(P);
     check("Zpět: výchozí kamera a popisek Celá scéna", iF.fit === false && iF.man === false && Math.abs(iF.cam.s - defS) < 0.003 && (await P.innerText("#fitTxt")) === "Celá scéna", `s ${iF.cam.s.toFixed(3)} (výchozí ${defS.toFixed(3)})`);
+    }
 
     // 6) Přidat na plochu / celá obrazovka
     if (!i0.hasFs) {
@@ -212,7 +250,7 @@ const layout = p => p.evaluate(() => {
 
     // 7) zakladatel hodí: nový hod ukončí ruční kameru i Celou ulici
     await drag1(c.x + 60, c.y, c.x - 60, c.y);
-    await P.click("#fitBtn");
+    if (!fits) await P.click("#fitBtn");
     await drag1(c.x + 60, c.y, c.x - 60, c.y);
     await settle(P);
     check("před hodem soupeře je ruční kamera zapnutá", (await info(P)).man === true);
@@ -272,7 +310,8 @@ const layout = p => p.evaluate(() => {
   {
     const res = await fetch(URL + "manifest.webmanifest"), m = await res.json();
     check("manifest.webmanifest: standalone, jméno, barvy, bez start_url", m.display === "standalone" && m.name === "Mlask!" && m.theme_color === "#BFE7F6" && m.background_color === "#BFE7F6" && !("start_url" in m), JSON.stringify(Object.keys(m)));
-    const okIcons = await Promise.all(m.icons.map(async ic => (await fetch(URL + ic.src)).status === 200));
+    // tělo se musí přečíst: nepřečtené tělo a zavřené spojení (python http.server) shodí undici v Node 24 po konci testu
+    const okIcons = await Promise.all(m.icons.map(async ic => { const r = await fetch(URL + ic.src); await r.arrayBuffer(); return r.status === 200; }));
     check("manifest: ikony se načtou", okIcons.every(Boolean) && m.icons.some(ic => ic.sizes === "512x512"));
     const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
     check("hlavička: manifest, apple-mobile-web-app-capable, status-bar-style, apple-touch-icon", /rel="manifest"/.test(html) && /apple-mobile-web-app-capable" content="yes"/.test(html) && /apple-mobile-web-app-status-bar-style/.test(html) && /rel="apple-touch-icon"/.test(html));

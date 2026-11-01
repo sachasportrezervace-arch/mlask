@@ -1,5 +1,15 @@
 # Pracovní deník – Polštářovka
 
+PŘEVZATO 1. 11. – kolo vylepšení, session polstarovka (mlask kolo 1. 11.); jiná session sem nepíše.
+
+## 2026-11-01 – kolo vylepšení: konec bitvy, mobil na šířku, nestabilní ui.cjs
+- **Design-eye na živé animaci** (listy z videa skutečné partie v reálném čase, `tests/video.cjs`): kolo 1 „NE“ (dock na šířku třetina obrazovky, K.O. useknuté, přejezd přes prázdné nebe, statická radost vítěze), kolo 2 **„ANO, profi indie hra“** s drobnostmi (karta na šířku zakryje visícího poraženého, texty karty suché → přepsány hlasem vítěze, mírné pumpování zoomu na desktopu po K.O.). Listy `tests/shots/video-r3..r5`.
+- **Opravy po kole 1:** na šířku mimo tah plovoucí pilulka stavu + 2 ikony (`.dock.idle`), na tahu boční dock 252 px (`.app.side`); kamera po konci zabírá poraženého bez posunu ven (`loserShot`); přejezd na vítěze ease-in-out 0,4 s (`endPan`, `PAN_S`); radost vítěze cyklus 600 ms; konfety 36 ks úměrné zoomu; karta na šířku v půlce na straně poraženého (`#end.wl`), zhutněná. `ui.cjs`: na šířku se ulice vejde → `fitBtn` skrytý, posun a Celá scéna se přeskočí (`fits`).
+- **Texty karty bez sázky:** jedna věta hlasem vítěze podle seedu (`pickLine`).
+- **Příčina nestabilního `ui.cjs` (sevření + kolečko):** výška balkonů se losuje podle místnosti (`layout(seed)`, y 500–620), štítek „soupeř mimo obraz“ (`peekHit`) se tím posouvá a u části místností leží pod prvním prstem sevření. Štítek se chytal už na `pointerdown` → gesto = ťuk na štítek, zoom se neprovedl. Důkaz: původní kód + nový test na 8798 → FAIL „sevřít“ (0,902) a „kolečko“; nový kód 149/149. Oprava: štítek platí až po ťuknutí (`peekTap`), druhý prst = štípnutí, posun = posun/prak. Nové kontroly v `ui.cjs` (4b). Pád undici v Node 24 po konci `ui.cjs` opraven čtením těla fetch.
+- **Konec bitvy:** kamera drží poraženého do dopadu K.O., pak přejede na vítěze (`endShot`), konfety až tam, karta ~1,9 s potom; lišta dole po konci bez „X vyhrál.“ (`waitBox` skrytý bez textu); štítek soupeře po konci zmizí.
+- **Nástroj:** `tests/video.cjs URL out [jména]` – video celé sólo partie (výhra/prohra, desktop, mobil, na šířku) + kontaktní listy zásahu a konce z videa v reálném čase (ffmpeg). Kolo 1: `tests/shots/video-r1`.
+
 PŘEVZATO 31. 10. 19:35 – redesign postav a efektů z Markova zadání, session mlask-vizual (jiná session sem nepíše).
 
 PŘEVZATO 31. 10. – dodělává session na účtu P, jiná session sem nepíše.

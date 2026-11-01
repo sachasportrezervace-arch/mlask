@@ -236,11 +236,31 @@ textarea.bubble{min-height:120px;resize:vertical;font-size:15px;line-height:1.4;
 }
 /* Mobil na šířku: dock vpravo */
 @media (orientation:landscape) and (max-height:540px){
-  .app{grid-template-rows:none;grid-template-columns:minmax(0,1fr) 270px}
-  .dock{max-height:none;height:100%;padding:8px 12px calc(8px + env(safe-area-inset-bottom));align-content:start}
+  .app{grid-template-rows:none;grid-template-columns:minmax(0,1fr)}
+  .app.side{grid-template-columns:minmax(0,1fr) 252px}
+  .dock{max-height:none;height:100%;padding:8px 10px calc(8px + env(safe-area-inset-bottom));align-content:start}
+  /* mimo tah: scéna má celou šířku, stav a dvě ikony plavou v pravém dolním rohu */
+  .dock.idle{position:absolute;right:max(10px,env(safe-area-inset-right));bottom:max(8px,env(safe-area-inset-bottom));height:auto;width:auto;max-width:calc(50% - 86px);background:none;padding:0;overflow:visible;z-index:6}
+  .dock.idle .dockin{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:8px;width:auto}
+  .dock.idle .tools{order:2;margin:0}
+  .dock.idle .wait{order:1;min-width:0;min-height:44px;gap:2px;padding:4px 14px;background:rgba(255,255,255,.94);border-radius:22px}
+  .dock.idle .waitline{font-size:14px;gap:8px}
+  .dock.idle .dot{width:9px;height:9px}
+  .dock.idle .wait .meta,.dock.idle .lastnote{display:none}
+  /* karta výsledku v pravé půlce, vlevo zůstává vidět scéna */
+  #end{justify-items:end;padding:8px max(14px,env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) 14px;background:linear-gradient(90deg,rgba(29,33,69,0) 30%,rgba(29,33,69,.4) 60%)}
+  #end .card{width:min(430px,50vw);max-height:85vh;max-height:85dvh;overflow:auto;margin:auto 0;padding:14px 18px 16px;gap:8px}
+  #end .card .big{font-size:clamp(24px,7vh,32px)}
+  #end .card .btn{min-height:44px;padding-top:6px;padding-bottom:6px}
+  #end .ticket{padding-top:6px;padding-bottom:6px}
+  #end .card .meta{font-size:13px}
+  /* vyhrál hráč vpravo: karta jde doleva, na stranu poraženého, vítěz zůstane vidět */
+  #end.wl{justify-items:start;padding:8px 14px calc(8px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));background:linear-gradient(270deg,rgba(29,33,69,0) 30%,rgba(29,33,69,.4) 60%)}
+  .dock.idle .net{order:0;background:rgba(255,255,255,.94);border-radius:18px;padding:4px 12px;font-size:13px}
   .rrow{flex-wrap:wrap}
   .rbtn{width:46px;height:46px}.rbtn canvas{width:46px;height:46px}
-  .dbtn{width:76px}.dbtn svg{width:46px;height:46px}
+  .dbtn{width:68px;font-size:12.5px}.dbtn svg{width:46px;height:46px}
+  .rrow{gap:8px}.gl{margin-bottom:3px}.mine{gap:6px}
   .wait{padding-right:0}
   .tools{position:static;justify-content:flex-end;margin-bottom:4px}
   .hud{top:calc(env(safe-area-inset-top) + 6px)}
@@ -1617,13 +1637,20 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     if (o.win != null) kids[o.win].happyT = nowS();
     if (view === "end") { render(); return; }
     // konec zápasu: vítěz sype konfety (jednou za bitvu), pak teprve se otevře karta s výsledkem
-    if (o.win != null && celebrated !== g.gn && !skipped) {
+    // pointa: kamera drží poraženého, dokud nedopadne přes zábradlí, pak přejede na vítěze (konfety až tam) a teprve pak karta
+    let wait = 800;
+    if (o.win != null && celebrated !== g.gn && !skipped && !calm()) {
       celebrated = g.gn;
-      const P = layoutNow().players[o.win];
-      burst(P.x + P.dir * 30, P.y - 230, 34, "confetti", { sp: 7, up: 7, size: 9, life: 1.9 });
+      const lk = kids[1 - o.win], n = nowS(), gn = g.gn, win = o.win;
+      // časování: K.O. drží ~1,2 s po dopadu, přejezd kamery 0,4 s, radost vítěze ~1,3 s, pak karta
+      endShot = { gn, at: Math.max(n + 0.9, lk.koG === gn ? lk.koT + 1.2 : 0) };
+      const P = layoutNow().players[win];
+      // konfety: na obrazovce 6-8 px bez ohledu na zoom (na mobilu je svět zmenšený), 36 kusů
+      setTimeout(() => { if (g && g.gn === gn) burst(P.x + P.dir * 30, P.y - 230, 36, "confetti", { sp: 7, up: 7, size: Math.max(9, 7.2 / cam.s), life: 1.9 }); }, (endShot.at - n + PAN_S + 0.05) * 1000);
+      wait = (endShot.at - n + PAN_S + 1.3) * 1000;
     }
     skipped = false;
-    endTimer = setTimeout(() => { if (overOf() && caughtUp() && (view === "play")) show("end"); }, overOf() && overOf().win != null && !calm() ? 2600 : 800);
+    endTimer = setTimeout(() => { if (overOf() && caughtUp() && (view === "play")) show("end"); }, wait);
   }
   const seenKey = () => "pol-seen-" + room.id;
   function saveSeen() { if (room && g && !solo) store.set(seenKey(), JSON.stringify({ gn: g.gn, k: shownK })); }
@@ -1633,7 +1660,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   const parts = [], texts = [], trail = [], fxLog = []; let fxCount = 0;
   let shake = 0;
   // hit-stop (zastavení hry na pár snímků při zásahu) a úder kamery; jen prezentace, simulaci se nedotýkají
-  let stopT = 0, punch = 0, punchAt = { x: 0, y: 0 }, celebrated = -1;
+  let stopT = 0, punch = 0, punchAt = { x: 0, y: 0 }, celebrated = -1, endShot = { gn: -1, at: 0 };
+  const PAN_S = 0.4; let endPan = { gn: -1, t0: 0, from: null }; // přejezd kamery z poraženého na vítěze: vlastní ease-in-out místo pomalého doběhu
   const AIMED_KEY = "pol-aimed";
   let bubble = null; // { who, text, stamp, t }
   function say(who, text, stamp) { bubble = { who, text, stamp: STAMPS[stamp] || "", t: nowS() }; }
@@ -1760,8 +1788,14 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     const s = defScale();
     const visW = CW / s, y = 965 - CH / s / 2;
     const fx = focusX();
-    const x = visW >= W + 60 ? W / 2 : Math.max(visW / 2 - 70, Math.min(W + 70 - visW / 2, fx));
+    const lim = loserShot() ? 130 : 70; // poražený po přehozu přes zábradlí visí za okrajem světa: kamera smí o kus dál, ať má od kraje obrazovky >= 40 px
+    const x = visW >= W + 60 ? W / 2 : Math.max(visW / 2 - lim, Math.min(W + lim - visW / 2, fx));
     return { x, y, s };
+  }
+  // po konci zápasu kamera drží poraženého (K.O.), než přejede na vítěze
+  function loserShot() {
+    const ov = g && overOf();
+    return !!(ov && ov.win != null && !play && !(endShot.gn === g.gn && nowS() >= endShot.at));
   }
   function focusX() {
     const L = layoutNow();
@@ -1773,8 +1807,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
       if (play.lead) return play.lead.x;
     }
     if (play) { const p = L.players[play.res.t]; return p.x + p.dir * 130; }
-    const t = g ? (overOf() ? (overOf().win == null ? 0 : 1 - overOf().win) : thrower()) : 0; // po konci kamera drží poraženého: K.O. je pointa
+    const ov = g && overOf(), toWin = ov && ov.win != null && endShot.gn === g.gn && nowS() >= endShot.at;
+    const t = g ? (ov ? (ov.win == null ? 0 : toWin ? ov.win : 1 - ov.win) : thrower()) : 0; // po konci drží poraženého (K.O. je pointa), pak vítěze
     const p = L.players[me !== null && g && !overOf() ? (canThrow() ? me : thrower()) : t];
+    if (loserShot()) return p.x; // poražený: bez posunu dovnitř, ať ho kraj obrazovky neuseknul
     return p.x + p.dir * 130;
   }
   const toScreen = (x, y) => [(x - cam.x) * cam.s + CW / 2, (y - cam.y) * cam.s + CH / 2];
@@ -1796,7 +1832,13 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     camUi();
     // blízko cíle se kamera dosadí přesně (dojezd bez věčného „skoro“; skok pod 3 px)
     const near = Math.abs(goal.s - cam.s) < 0.005 && Math.abs(goal.x - cam.x) < 4 && Math.abs(goal.y - cam.y) < 5;
-    if (camSnap || man || near) { cam.x = goal.x; cam.y = goal.y; cam.s = goal.s; camSnap = false; }
+    const ov = g && !play && overOf();
+    if (ov && ov.win != null && endShot.gn === g.gn && nowS() >= endShot.at && endPan.gn !== g.gn) endPan = { gn: g.gn, t0: nowS(), from: { x: cam.x, y: cam.y, s: cam.s } };
+    const pu = g && endPan.gn === g.gn && !man ? (nowS() - endPan.t0) / PAN_S : 1;
+    if (pu < 1 && !calm()) {
+      const e = pu < 0.5 ? 2 * pu * pu : 1 - Math.pow(-2 * pu + 2, 2) / 2, f = endPan.from;
+      cam.x = f.x + (goal.x - f.x) * e; cam.y = f.y + (goal.y - f.y) * e; cam.s = f.s + (goal.s - f.s) * e; camSnap = false;
+    } else if (camSnap || man || near) { cam.x = goal.x; cam.y = goal.y; cam.s = goal.s; camSnap = false; }
     else {
       const a = Math.min(1, dt * (play ? 5 : 3));
       cam.x += (goal.x - cam.x) * a; cam.y += (goal.y - cam.y) * Math.min(1, dt * 6); cam.s += (goal.s - cam.s) * Math.min(1, dt * 6);
@@ -1981,8 +2023,16 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     }
     // konec bitvy: vítěz skáče s pěstmi, poražený se po závratích přehodí přes zábradlí
     if (done && ov.win === j) {
-      const a = C ? 0 : Math.abs(Math.sin(t * 4.6)), q = clamp01(a * 5);
-      o.ex = "joy"; o.by = -18 * a; o.a1 = [1.3, 1.9 + Math.sin(t * 10) * 0.18]; o.a2 = [-1.0 + Math.sin(t * 10) * 0.06, -1.6]; o.h1 = o.h2 = "fist"; o.l1 = [0.7 * q, -0.4 * q]; o.l2 = [-0.3 * q, -0.9 * q];
+      // opakovaný cyklus 600 ms: přikrčení (120 ms), výskok o 14 px se stretchem a máváním pěsti, dopad s dokmitem; začíná, až kamera dojede k vítězi
+      const T0 = endShot.gn === g.gn ? endShot.at + PAN_S * 0.6 : n, CY = 0.6, c = (((n - T0) % CY) + CY) % CY, wv = C ? 0 : Math.sin(c / CY * Math.PI * 2);
+      let sy = 1, by = 0, q = 0, pull = 0;
+      if (!C) {
+        if (c < 0.12) { const p = c / 0.12; sy = 1 - 0.1 * easeOut(p); pull = easeOut(p); }
+        else if (c < 0.38) { const p = (c - 0.12) / 0.26, ar = Math.sin(p * Math.PI); sy = (p < 0.2 ? lerp(0.9, 1, p / 0.2) : 1) + 0.06 * ar; by = -14 * ar; q = clamp01(ar * 1.5); }
+        else { const w = c - 0.38, dm = Math.exp(-w * 14); sy = 1 - 0.1 * dm * Math.cos(w * 30); pull = 0.4 * dm; }
+      }
+      o.ex = "joy"; o.sy = sy; o.sx = 2 - sy; o.by = by;
+      o.a1 = [1.3 + 0.25 * wv - 0.5 * pull, 1.9 + 0.5 * wv - 0.7 * pull]; o.a2 = [-1.0 + 0.08 * wv, -1.6 + 0.2 * wv]; o.h1 = o.h2 = "fist"; o.l1 = [0.7 * q, -0.4 * q]; o.l2 = [-0.3 * q, -0.9 * q];
       o.lean = 0; o.sweat = 0; o.shiver = 0; o.hr = 0; o.hold = -1; o.t1 = null;
     }
     const koAt = k.koG === g.gn ? k.koT : -9, koa = lost ? 9 : n - koAt;
@@ -2225,10 +2275,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     ctx.strokeStyle = INK; ctx.lineWidth = 11; ctx.stroke(); ctx.strokeStyle = aim.ok ? P.yellow : P.white; ctx.lineWidth = 5; ctx.stroke();
     circ(ctx, x0, y0, 8); Art.paint(ctx, P.white, 3.5); circ(ctx, x0 + dx, y0 + dy, 13); Art.paint(ctx, aim.ok ? P.yellow : P.white, 3.5);
   }
-  let peekHit = null;
+  let peekHit = null, peekTap = null;
   function drawOffscreen(L, v) {
     peekHit = null;
-    if (!g || view !== "play") return;
+    if (!g || view !== "play" || (overOf() && caughtUp())) return; // po konci vede kameru pointa, ne štítek
     const o = me === null ? null : 1 - me;
     if (o !== null) {
       const Pl = L.players[o];
@@ -2253,13 +2303,16 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
 
   cv.addEventListener("pointerdown", ev => {
     const r = cv.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
-    if (peekHit && x >= peekHit.x && x <= peekHit.x + peekHit.w && y >= peekHit.y && y <= peekHit.y + peekHit.h) { camAuto(); peekX = peekHit.to; peekUntil = nowS() + 1.8; return; }
+    const onPeek = peekHit && !ptrs.size && x >= peekHit.x && x <= peekHit.x + peekHit.w && y >= peekHit.y && y <= peekHit.y + peekHit.h;
     ptrs.set(ev.pointerId, { x, y });
     if (ptrs.size >= 2) { // dva prsty: vždy posun + štípnutí a rozmířený hod se ruší
       ev.preventDefault(); attempt(() => cv.setPointerCapture(ev.pointerId));
+      peekTap = null;
       if (ptrs.size === 2) { cancelAim(); beginPinch(); }
       return;
     }
+    // štítek soupeře mimo obraz platí až po ťuknutí: druhý prst z něj udělá štípnutí, posun prstu posun kamery
+    if (onPeek) { ev.preventDefault(); attempt(() => cv.setPointerCapture(ev.pointerId)); peekTap = { id: ev.pointerId, x, y, cx: ev.clientX, cy: ev.clientY, to: peekHit.to }; return; }
     // jeden prst nebo myš: na tahu je to prak, jinak posun (myš: prostřední/pravé tlačítko nebo Shift posouvá vždy)
     if (!canThrow() || (ev.pointerType === "mouse" && (ev.button !== 0 || ev.shiftKey))) {
       ev.preventDefault(); attempt(() => cv.setPointerCapture(ev.pointerId)); beginPan(ev.pointerId); return;
@@ -2274,6 +2327,15 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   cv.addEventListener("pointermove", ev => {
     const p = ptrs.get(ev.pointerId);
     if (p) { const r = cv.getBoundingClientRect(); p.x = ev.clientX - r.left; p.y = ev.clientY - r.top; }
+    if (peekTap && ev.pointerId === peekTap.id) {
+      if (!p || Math.hypot(p.x - peekTap.x, p.y - peekTap.y) <= 10) return;
+      const t = peekTap; peekTap = null;
+      if (!canThrow()) { beginPan(ev.pointerId); return; }
+      kb.on = false; // na tahu je to prak jako kdekoli jinde
+      aim = { pid: ev.pointerId, x0: t.cx, y0: t.cy, x1: ev.clientX, y1: ev.clientY, vx: 0, vy: 0, pow: 0, angle: 0, ok: false };
+      cv.classList.add("aiming"); updAim();
+      return;
+    }
     if (gest) { moveGest(ev.pointerId); return; }
     if (!aim || ev.pointerId !== aim.pid) return; aim.x1 = ev.clientX; aim.y1 = ev.clientY; updAim(); });
   const endAim = ev => {
@@ -2284,6 +2346,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   };
   const upPtr = ev => {
     ptrs.delete(ev.pointerId);
+    if (peekTap && peekTap.id === ev.pointerId) {
+      if (ev.type === "pointerup") { camAuto(); peekX = peekTap.to; peekUntil = nowS() + 1.8; }
+      peekTap = null;
+    }
     if (gest && (gest.type === "pinch" || gest.id === ev.pointerId)) {
       const was = gest.type; gest = null;
       if (was === "pinch" && ptrs.size === 1 && !canThrow()) beginPan([...ptrs.keys()][0]); // zbylý prst pokračuje v posunu
@@ -2528,8 +2594,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   let defKey = "";
   function renderTray() {
     $("tray").hidden = !g || !room || (view !== "play" && view !== "end");
+    const mine = !$("tray").hidden && canThrow();
+    document.querySelector(".app").classList.toggle("side", mine); // na šířku: boční dock jen na tahu
+    $("tray").classList.toggle("idle", !mine);
     if ($("tray").hidden) return;
-    const mine = canThrow();
     $("myTray").hidden = !mine;
     $("waitBox").hidden = mine;
     $("noteBtn").hidden = !mine;
@@ -2563,7 +2631,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     $("claims").hidden = me !== null || !!H;
     const over2 = caughtUp() ? overOf() : null; // výsledek se neprozradí, dokud poslední hod nedoletí
     $("waitDot").hidden = me === null || !!over2;
-    if (over2) { const o = over2; text = o.draw ? "Remíza." : `${nameOf(o.win)} ${past(o.win, "vyhrál")}.`; }
+    if (over2) text = ""; // výsledek říká scéna a karta, lišta ho neopakuje
     else if (play) { text = `Letí to od: ${nameOf(play.res.t)}…`; }
     else if (me === null) {
       text = "Přihlížíš.";
@@ -2577,7 +2645,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
       const d = shownState().def[me];
       meta = solo ? (d ? `Máš tajně připravené: ${DEFS[d].name}.` : "") : (sexOf(opp) === "h" ? "Její" : "Jeho") + " hod se tu přehraje sám." + (d ? ` Máš tajně připravené: ${DEFS[d].name}.` : "");
     }
-    $("waitText").textContent = text;
+    $("waitText").textContent = text; $("waitBox").hidden = !text;
     $("waitMeta").textContent = meta; $("waitMeta").hidden = !meta;
   }
   // nabídka menu (odkaz, pravidla, nová hra)
@@ -2704,6 +2772,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   }
   function renderEnd() {
     const o = overOf(); if (!o) return;
+    $("end").classList.toggle("wl", o.win != null && layoutNow().players[o.win].dir < 0);
     const youWon = o.win != null && o.win === me, s = stake(g), w = seriesAfter(), st = lastState();
     if (o.draw) $("endTitle").textContent = "Remíza. Oba v peří.";
     else if (youWon) $("endTitle").innerHTML = "Výhra je <span class=\"hl\">tvoje!</span>";
@@ -2711,10 +2780,13 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
     const md = Pol.MODS[g.m | 0], tier = j => Math.min(3, j), up = !solo && o.win != null && tier(w[o.win]) > tier(g.w[o.win]);
     $("endMeta").textContent = solo ? `Trénink${md.name && md.id !== "classic" ? " (" + md.name.toLowerCase() + ")" : ""}, ${g.T.length} hodů. Zbylo: ${nameOf(0)} ${st.hp[0]}, ${nameOf(1)} ${st.hp[1]}.` : `Bitva ${g.gn + 1}${md.name && md.id !== "classic" ? " (" + md.name.toLowerCase() + ")" : ""}, ${g.T.length} hodů. Zbylo: ${nameOf(0)} ${st.hp[0]}, ${nameOf(1)} ${st.hp[1]}.` + (up ? ` ${nameOf(o.win)} je teď ${TITLES[tier(w[o.win])]} a dostává ${HATS[tier(w[o.win])]}.` : "");
     const W2 = o.win != null ? nameOf(o.win) : "", L2 = o.win != null ? nameOf(1 - o.win) : "";
+    const pickLine = a => a[((g.seed | 0) >>> 0) % a.length];
     $("tLabel").textContent = s ? "Sázka" : "Výsledek";
     $("tRes").textContent = o.draw ? (s ? "Sázka se přesouvá do odvety." : "Nikdo nevyhrál.")
       : me === null ? (s ? s.third(W2, L2) : `Vyhrává ${W2}.`)
-      : s ? (youWon ? s.win(W2, L2) : s.lose(W2, L2)) : (youWon ? "Bez sázky, jen pro radost." : solo ? "Zkus to znovu." : `Vyhrává ${W2}.`);
+      : s ? (youWon ? s.win(W2, L2) : s.lose(W2, L2)) : pickLine(youWon // bez sázky: jedna věta hlasem vítěze, ne systémová hláška
+        ? [`${L2} sbírá peří po celé ulici.`, `Bitva je tvoje. Peří taky.`, `${L2} visí přes zábradlí a přemýšlí o životě.`]
+        : [`${W2}: „Příště míř na mě, ne na lampu.“`, `${W2}: „Ještě jednou? Klidně.“`, `${W2}: „Peří ti sluší.“`]);
     $("tSer").hidden = solo;
     $("tSer").textContent = `série: ${nameOf(0)} ${w[0]} : ${w[1]} ${nameOf(1)}`;
     const stampOn = !!(youWon && s);
@@ -3142,7 +3214,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = Art;
   window.__pol = {
     info: () => ({ view, me, k: turnK(), shownK, playing: !!play, busy, canThrow: canThrow(), thrower: g ? thrower() : null,
       hp: lastState() ? lastState().hp.slice() : null, shownHp: play ? play.hp.slice() : shownState().hp.slice(), over: overOf(), solo, room: room && !solo ? room.id : null, gn: g && g.gn, T: g && g.T.map(t => t.slice(0, 4)), seed: g && g.seed, m: g && g.m, rage: g && lastState() ? Pol.rageFor(g, lastState(), thrower()) : false, hat: g ? [hatOf(0), hatOf(1)] : null, selItem, selPower,
-      selDef, def: shownState().def.slice(), aiming: !!aim, man: !!man, fit: fitAll, cam: { x: cam.x, y: cam.y, s: cam.s }, goal: camGoal(), vis: visRect(), W, CW, CH, defS: defScale(), fx: fxLog.slice(), fxN: fxCount, fitHidden: $("fitBtn").hidden, fsHidden: $("fsBtn").hidden, hasFs: !!fsReq, a2hsOpen: !$("a2hs").hidden, herna: H ? { faze: hFaze, seat: H.seat, r: H.r, wait: hernaCeka() } : null }),
+      selDef, def: shownState().def.slice(), aiming: !!aim, man: !!man, fit: fitAll, cam: { x: cam.x, y: cam.y, s: cam.s }, goal: camGoal(), vis: visRect(), peek: peekHit && { ...peekHit }, W, CW, CH, defS: defScale(), fx: fxLog.slice(), fxN: fxCount, fitHidden: $("fitBtn").hidden, fsHidden: $("fsBtn").hidden, hasFs: !!fsReq, a2hsOpen: !$("a2hs").hidden, herna: H ? { faze: hFaze, seat: H.seat, r: H.r, wait: hernaCeka() } : null }),
     openA2hs,
     forceMod(m, w) { if (!g) return null; const next = { ...g, m }; if (w) next.w = w; setG(next); render(); return g.m; }, // jen pro testy vzhledu, nic nezapisuje do místnosti
     solve(item = selItem, power = selPower) {
